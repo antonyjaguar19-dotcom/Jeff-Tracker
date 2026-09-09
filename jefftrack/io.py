@@ -1,6 +1,6 @@
 """Plate I/O, seeding, overlay drawing and 3DE 2D-track export.
 
-Split out of the CLI so the same helpers back `tools/run_dbtrack.py`, the evaluation
+Split out of the CLI so the same helpers back `tools/run_jefftrack.py`, the evaluation
 scripts and the demo renderer, rather than three copies drifting apart.
 """
 from __future__ import annotations
@@ -95,7 +95,7 @@ def draw_overlay(frame_bgr, tracks, vis, t, colors, tail=12):
 
 
 # --------------------------------------------------------------------------- 3DE export
-def write_3de(path, tracks, vis, first_frame, plate_h, prefix="DBT"):
+def write_3de(path, tracks, vis, first_frame, plate_h, prefix="JT"):
     """Classic 3DE 2D-track ASCII. Y is flipped: 3DE's origin is bottom-left, OpenCV's is
     top-left. Occluded frames are omitted, which is legal here -- gaps are how this repo
     represents an occlusion rather than deleting the track."""

@@ -1,15 +1,15 @@
 <div align="center">
 
-# DBtracker
+<img src="assets/logo.png" width="62%" alt="Jeff-Tracker">
 
 **An Apache-2.0 point tracker in the CoTracker class.**
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Weights](https://img.shields.io/badge/%F0%9F%A4%97%20weights-Hugging%20Face-yellow)](https://huggingface.co/antonyjaguar19-dotcom/DBtracker)
+[![Weights](https://img.shields.io/badge/%F0%9F%A4%97%20weights-Hugging%20Face-yellow)](https://huggingface.co/antonyjaguar19-dotcom/Jeff-Tracker)
 [![Base](https://img.shields.io/badge/base-LocoTrack--B-green.svg)](https://github.com/cvlab-kaist/locotrack)
 [![DAVIS](https://img.shields.io/badge/TAP--Vid%20DAVIS-67.7%20AJ-orange.svg)](docs/METHOD.md)
 
-<img src="assets/demo_grid.gif" width="88%" alt="DBtracker tracking a dense grid through a DAVIS clip">
+<img src="assets/demo_grid.gif" width="88%" alt="Jeff-Tracker tracking a dense grid through a DAVIS clip">
 
 </div>
 
@@ -19,7 +19,7 @@ The strongest open point trackers — CoTracker3, MFT, SpatialTracker — are **
 code *and* weights. NonCommercial restricts **use**, not just redistribution, so "we only
 run it in-house" does not make them safe in a commercial pipeline.
 
-DBtracker is [LocoTrack-B](https://github.com/cvlab-kaist/locotrack) (Apache-2.0) plus
+Jeff-Tracker is [LocoTrack-B](https://github.com/cvlab-kaist/locotrack) (Apache-2.0) plus
 cross-track attention, written from the CoTracker3 paper
 ([arXiv:2410.11831](https://arxiv.org/abs/2410.11831)) and fine-tuned on Apache-2.0 MOVi-E.
 Code, base weights and training data are Apache-2.0 end to end. No CoTracker code, weights
@@ -38,7 +38,7 @@ TAP-Vid DAVIS, 30 clips, 256×256, the reference metric called unmodified.
 | model | licence | AJ | δ_avg | OA | s/frame |
 |---|---|---|---|---|---|
 | **TAPNext++** | Apache-2.0 | **66.2** | **79.4** | **92.1** | 0.2440 |
-| DBtracker | Apache-2.0 | 62.6 | 74.9 | 86.7 | **0.0065** |
+| Jeff-Tracker | Apache-2.0 | 62.6 | 74.9 | 86.7 | **0.0065** |
 | CoTracker3 | CC-BY-NC | 61.9 | 76.8 | 87.5 | 0.0264 |
 
 **TAPNext++ is the most accurate model here, and it is also Apache-2.0.** That is not the
@@ -46,7 +46,7 @@ result this project set out to find, and it goes first because burying it would 
 everything else here less trustworthy. If accuracy is all that matters and the licence must
 be clean, use TAPNext++.
 
-DBtracker's case is cost: **37× faster** at 3.6 AJ behind, plus a calibrated per-frame
+Jeff-Tracker's case is cost: **37× faster** at 3.6 AJ behind, plus a calibrated per-frame
 confidence neither of the others returns. Against CoTracker3 — the model whose licence
 motivated the project — it is +0.7 AJ and −1.9 δ_avg at a quarter of the cost.
 
@@ -59,11 +59,11 @@ than as a refutation of its paper.
 Reproduce, and read [docs/BENCHMARK.md](docs/BENCHMARK.md) before quoting any of it:
 
 ```bash
-python tools/benchmark.py --models dbtracker,tapnext,cotracker3 --whole-clip \n    --out out/benchmark_whole.json
+python tools/benchmark.py --models jefftracker,tapnext,cotracker3 --whole-clip \n    --out out/benchmark_whole.json
 python tools/plot_benchmark.py --json out/benchmark_whole.json --out assets/benchmark.png
 ```
 
-Only DBtracker is built in. TAPNext++ and CoTracker3 are loaded from paths you supply;
+Only Jeff-Tracker is built in. TAPNext++ and CoTracker3 are loaded from paths you supply;
 neither is vendored here, and **CoTracker3 is CC-BY-NC — running it is your licence call,
 not this repository's.**
 
@@ -96,8 +96,8 @@ Two more, stated plainly:
 ## Install
 
 ```bash
-git clone https://github.com/antonyjaguar19-dotcom/DBtracker
-cd DBtracker
+git clone https://github.com/antonyjaguar19-dotcom/Jeff-Tracker
+cd Jeff-Tracker
 pip install torch --index-url https://download.pytorch.org/whl/cu121   # match your CUDA
 pip install -r requirements.txt
 python tools/fetch_weights.py --all
@@ -110,7 +110,7 @@ are on the Hugging Face Hub, not in git.
 
 ```python
 import torch
-tracker = torch.hub.load("antonyjaguar19-dotcom/DBtracker", "dbtracker").cuda()
+tracker = torch.hub.load("antonyjaguar19-dotcom/Jeff-Tracker", "jefftracker").cuda()
 
 # frames: (T, H, W, 3) uint8 BGR      queries: (N, 3) as [frame, x, y]
 tracks, vis, conf = tracker.track_queries_conf(frames, queries)
@@ -122,7 +122,7 @@ tracks, vis, conf = tracker.track_queries_conf(frames, queries)
 A directory of frames straight to 3DE-style 2D-track ASCII plus an overlay mp4:
 
 ```bash
-python tools/run_dbtrack.py --plate /path/to/frames --name myshot --seed corners --points 600
+python tools/run_jefftrack.py --plate /path/to/frames --name myshot --seed corners --points 600
 ```
 
 ## Verify
@@ -132,8 +132,8 @@ a value which *should* be zero. Both metric defects found while building this we
 measuring the input instead of the tracker, and each was caught this way.
 
 ```bash
-python -m dbtrack.engine --selftest         # rigid translation, exact GT -> 0.100 px
-python tools/check_identity.py              # untrained DBtrack IS LocoTrack -> 0.000e+00
+python -m jefftrack.engine --selftest         # rigid translation, exact GT -> 0.100 px
+python tools/check_identity.py              # untrained Jeff-Tracker IS LocoTrack -> 0.000e+00
 python tools/score_occlusion.py --control   # scorer against truth -> 0.00000 px
 python tools/eval_tapvid.py --mode strided  # the port -> 67.7 / 79.5 / 89.8
 ```
@@ -158,7 +158,7 @@ weighting, implemented from the paper's formula. ~2 s/step at 2.3 GB on an RTX A
 ## Layout
 
 ```
-dbtrack/   engine.py  io.py  losses.py  model/  data/
+jefftrack/ engine.py  io.py  losses.py  model/  data/
 tools/     run, train, benchmark, demos, control passes
 docs/      METHOD.md (measurements)  BENCHMARK.md (protocol)  LICENSES.md (provenance)
 assets/    README media + source attribution

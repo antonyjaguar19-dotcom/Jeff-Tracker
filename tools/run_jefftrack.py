@@ -1,6 +1,6 @@
-"""DBtracker on a plate directory -> 3DE 2D-track ASCII, npz, overlay, stats.
+"""Jeff-Tracker on a plate directory -> 3DE 2D-track ASCII, npz, overlay, stats.
 
-    python run_dbtrack.py ^
+    python run_jefftrack.py ^
         --plate C:\\path\\to\\plate --name myshot
 
 It vendors LocoTrack under vendor/ (Apache-2.0, see
@@ -38,8 +38,8 @@ import cv2  # noqa: E402
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
-from dbtrack.engine import DBTrackEngine, DEFAULT_CKPT  # noqa: E402
-from dbtrack.io import (  # noqa: E402
+from jefftrack.engine import JeffTrackEngine, DEFAULT_CKPT  # noqa: E402
+from jefftrack.io import (  # noqa: E402
     draw_overlay, list_frames, read_frame, seed_corners, seed_grid, track_colors,
     write_3de,
 )
@@ -47,7 +47,7 @@ from dbtrack.io import (  # noqa: E402
 
 # --------------------------------------------------------------------------- main
 def main() -> int:
-    ap = argparse.ArgumentParser(description="DBtracker (LocoTrack) on a plate directory")
+    ap = argparse.ArgumentParser(description="Jeff-Tracker (LocoTrack) on a plate directory")
     ap.add_argument("--plate", required=True)
     ap.add_argument("--name", default="shot")
     ap.add_argument("--ckpt", default=DEFAULT_CKPT)
@@ -58,8 +58,8 @@ def main() -> int:
     ap.add_argument("--model-res", default="256x256",
                     help="LocoTrack input resolution HxW; this is what bounds precision")
     ap.add_argument("--model-size", default="base", choices=["small", "base"])
-    ap.add_argument("--arch", default="locotrack", choices=["locotrack", "dbtrack"],
-                    help="dbtrack adds cross-track attention; zero-initialised it is "
+    ap.add_argument("--arch", default="locotrack", choices=["locotrack", "jefftrack"],
+                    help="jefftrack adds cross-track attention; zero-initialised it is "
                          "LocoTrack bit for bit, so the two agree until it is trained")
     ap.add_argument("--window", type=int, default=0, help="time window; 0 = auto")
     ap.add_argument("--seed", default="corners", choices=["grid", "corners"])
@@ -92,7 +92,7 @@ def main() -> int:
     q = np.concatenate([np.zeros((len(pts), 1), np.float32), pts], 1)
     print("[seed] {} points ({})".format(len(pts), a.seed))
 
-    eng = DBTrackEngine(device="cuda", model_size=a.model_size, ckpt=a.ckpt,
+    eng = JeffTrackEngine(device="cuda", model_size=a.model_size, ckpt=a.ckpt,
                         model_res=model_res, window=a.window, arch=a.arch)
     if eng.device == "cuda":
         torch.cuda.reset_peak_memory_stats()
@@ -109,7 +109,7 @@ def main() -> int:
     tracks_plate[..., 0] *= sx
     tracks_plate[..., 1] *= sy
 
-    base = os.path.join(a.out, a.name + "__dbtrack")
+    base = os.path.join(a.out, a.name + "__jefftrack")
     write_3de(base + ".txt", tracks_plate, vis, first_frame, plate_h)
     np.savez_compressed(base + ".npz", tracks=tracks_plate, visibility=vis,
                         confidence=conf, first_frame=first_frame,

@@ -1,8 +1,8 @@
-"""Three-way TAP-Vid DAVIS benchmark: DBtracker, TAPNext++, CoTracker3.
+"""Three-way TAP-Vid DAVIS benchmark: Jeff-Tracker, TAPNext++, CoTracker3.
 
-    python tools/benchmark.py --models dbtracker,tapnext,cotracker3 --out out/bench.json
+    python tools/benchmark.py --models jefftracker,tapnext,cotracker3 --out out/bench.json
 
-Only DBtracker is built in. The other two are loaded from paths you supply, because
+Only Jeff-Tracker is built in. The other two are loaded from paths you supply, because
 neither belongs in this repository:
 
     --tapnext-root  DIR   a checkout that provides tapnet.tapnext (Apache-2.0)
@@ -10,7 +10,7 @@ neither belongs in this repository:
 
 **CoTracker3 is CC-BY-NC-4.0.** Nothing of it is vendored, mirrored or redistributed here;
 this script only calls it if you point it at your own copy, and the licence question of
-running it is yours, not this repository's. TAPNext++ is Apache-2.0, like DBtracker.
+running it is yours, not this repository's. TAPNext++ is Apache-2.0, like Jeff-Tracker.
 
 ## Protocol, and why it is the same for all three
 
@@ -20,7 +20,7 @@ TAP-Vid DAVIS, **query-first**, 256x256 -- the standard published setting. The m
 In `first` mode the metric builds its evaluation mask as `cumsum(eye) - eye`, so only
 frames strictly **after** a point's query frame are scored. That single fact is what makes
 this comparison fair: TAPNext is causal -- it streams forward from a seed and cannot look
-back -- while DBtracker and CoTracker3 see the whole clip at once. So every model here is
+back -- while Jeff-Tracker and CoTracker3 see the whole clip at once. So every model here is
 run the same way: queries are grouped by their query frame `k`, the model is given
 `frames[k:]` with the queries at local frame 0, and its output is scattered back into the
 full timeline. Frames before `k` are left at zero and are never read by the metric.
@@ -46,7 +46,7 @@ ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from dbtrack.paths import add_vendor_to_path  # noqa: E402
+from jefftrack.paths import add_vendor_to_path  # noqa: E402
 
 add_vendor_to_path()
 
@@ -76,12 +76,12 @@ class Adapter:
         raise NotImplementedError
 
 
-class DBtrackerAdapter(Adapter):
-    name = "dbtracker"
+class JeffTrackerAdapter(Adapter):
+    name = "jefftracker"
 
-    def __init__(self, ckpt, arch="dbtrack", res=(RES, RES)):
-        from dbtrack.engine import DBTrackEngine                      # noqa: PLC0415
-        self.eng = DBTrackEngine(device="cuda", model_size="base", ckpt=ckpt,
+    def __init__(self, ckpt, arch="jefftrack", res=(RES, RES)):
+        from jefftrack.engine import JeffTrackEngine                      # noqa: PLC0415
+        self.eng = JeffTrackEngine(device="cuda", model_size="base", ckpt=ckpt,
                                  model_res=res, arch=arch)
 
     def track(self, frames_bgr, queries):
@@ -236,14 +236,14 @@ def evaluate(adapter, data, limit=0, verbose=True, whole_clip=False):
 def main() -> int:
     ap = argparse.ArgumentParser(description="three-way TAP-Vid DAVIS benchmark")
     ap.add_argument("--pkl", default=DEFAULT_PKL)
-    ap.add_argument("--models", default="dbtracker")
+    ap.add_argument("--models", default="jefftracker")
     ap.add_argument("--limit", type=int, default=0, help="only N clips (a smoke run)")
     ap.add_argument("--out", default=os.path.join(ROOT, "out", "benchmark.json"))
     ap.add_argument("--ckpt", default=os.path.join(ROOT, "weights", "inf_s4000.ckpt"))
-    ap.add_argument("--arch", default="dbtrack", choices=["locotrack", "dbtrack"])
+    ap.add_argument("--arch", default="jefftrack", choices=["locotrack", "jefftrack"])
     ap.add_argument("--tapnext-root", default=os.environ.get("BTR_TAPNEXT_ROOT", ""))
     ap.add_argument("--whole-clip", action="store_true",
-                    help="let the OFFLINE models (dbtracker, cotracker3) use the whole "
+                    help="let the OFFLINE models (jefftracker, cotracker3) use the whole "
                          "clip and backward tracking, which is what they are built for. "
                          "TAPNext is causal and is unaffected by this flag.")
     ap.add_argument("--tapnext-engine", default="",
@@ -264,8 +264,8 @@ def main() -> int:
     results, per_clip = [], {}
     for m in want:
         print("\n=== {} ===".format(m), flush=True)
-        if m == "dbtracker":
-            ad = DBtrackerAdapter(a.ckpt, arch=a.arch)
+        if m == "jefftracker":
+            ad = JeffTrackerAdapter(a.ckpt, arch=a.arch)
         elif m == "tapnext":
             if not a.tapnext_root:
                 raise SystemExit("[ERROR] --tapnext-root is required for tapnext")

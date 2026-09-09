@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "dbtracker"
+name = "jefftracker"
 version = "0.1.0"
 description = "An Apache-2.0 point tracker in the CoTracker class, built on LocoTrack"
 readme = "README.md"
@@ -30,10 +30,10 @@ demo = ["pillow>=10.0"]
 eval = ["absl-py", "mediapy", "scipy", "tensorflow-cpu", "tensorflow_datasets"]
 
 [project.urls]
-Homepage = "https://github.com/antonyjaguar19-dotcom/DBtracker"
-Weights = "https://huggingface.co/antonyjaguar19-dotcom/DBtracker"
+Homepage = "https://github.com/antonyjaguar19-dotcom/Jeff-Tracker"
+Weights = "https://huggingface.co/antonyjaguar19-dotcom/Jeff-Tracker"
 
 [tool.setuptools]
-# vendor/ is redistributed LocoTrack, reached via sys.path by dbtrack.paths rather than
+# vendor/ is redistributed LocoTrack, reached via sys.path by jefftrack.paths rather than
 # installed as a package -- keeping its import names exactly as upstream has them.
-packages = ["dbtrack", "dbtrack.model", "dbtrack.data"]
+packages = ["jefftrack", "jefftrack.model", "jefftrack.data"]

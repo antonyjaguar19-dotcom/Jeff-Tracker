@@ -1,4 +1,4 @@
-# Evaluation and training only. Nothing here is imported by dbtrack.engine.
+# Evaluation and training only. Nothing here is imported by jefftrack.engine.
 #
 # TAP-Vid's official metric code (compute_tapvid_metrics, sample_queries_*) lives in
 # LocoTrack's vendored data/evaluation_datasets.py, whose module-level imports pull in

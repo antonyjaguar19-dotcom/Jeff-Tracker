@@ -1,4 +1,4 @@
-"""DBtracker engine -- LocoTrack (Apache-2.0) behind a stable engine interface.
+"""Jeff-Tracker engine -- LocoTrack (Apache-2.0) behind a stable engine interface.
 
 Why this exists: CoTracker is the tracker everyone wants and the one thing that cannot
 ship -- Meta releases its code AND its weights under CC-BY-NC-4.0. LocoTrack
@@ -12,7 +12,7 @@ The public surface is deliberately a drop-in shape for an existing TAPNext-style
     track_queries(frames_bgr, queries, fp16=False) -> (tracks (T,N,2) xy, vis (T,N) bool)
     track_grid(frames_bgr, grid_size, grid_query_frame=0, segm_mask=None) -> same
 
-so Stage-1 work survives if DBtracker is later wired into a host pipeline. Nothing
+so Stage-1 work survives if Jeff-Tracker is later wired into a host pipeline. Nothing
 outside this repository is touched by this file.
 
 One thing is deliberately NOT the same: track_queries_conf() also returns a continuous
@@ -23,7 +23,7 @@ directly, so this engine keeps it.
 
 Self-check (no plate needed, falls back to CPU if there is no GPU):
 
-    python -m dbtrack.engine --selftest
+    python -m jefftrack.engine --selftest
 """
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # engine.py lives inside the package, so the repo root -- which is what holds
 # vendor/, weights/ and pydeps/ -- is one level up.
 ROOT = os.path.dirname(HERE)
-PYDEPS = os.environ.get("DBTRACK_PYDEPS", os.path.join(ROOT, "pydeps"))
+PYDEPS = os.environ.get("JEFFTRACK_PYDEPS", os.path.join(ROOT, "pydeps"))
 VENDOR_PT = os.path.join(ROOT, "vendor", "locotrack", "locotrack_pytorch")
 # pydeps first: the embeddable runtime is in isolated mode, so PYTHONPATH is ignored and
 # the only way these land on the path is from inside the process. Same reason and same
@@ -52,7 +52,7 @@ import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
 DEFAULT_CKPT = os.environ.get(
-    "DBTRACK_CKPT", os.path.join(ROOT, "weights", "locotrack_base.ckpt"))
+    "JEFFTRACK_CKPT", os.path.join(ROOT, "weights", "locotrack_base.ckpt"))
 
 # LocoTrack was trained at 256x256 (LocoTrack.initial_resolution). Feeding it a larger
 # video does not just upscale -- get_feature_grids() infers a LADDER of refinement
@@ -63,18 +63,18 @@ DEFAULT_CKPT = os.environ.get(
 DEFAULT_MODEL_RES = (256, 256)
 
 
-def _load_dbtrack(ckpt_path: str, model_size: str, device: str, **kw):
-    """LocoTrack plus cross-track attention (see dbtrack/model/dbtrack_model.py).
+def _load_jefftrack(ckpt_path: str, model_size: str, device: str, **kw):
+    """LocoTrack plus cross-track attention (see jefftrack/model/jefftrack_model.py).
 
     Zero-initialised, this is LocoTrack bit for bit -- check_identity.py proves it -- so
-    running the whole bench through arch='dbtrack' on an untrained checkpoint must
+    running the whole bench through arch='jefftrack' on an untrained checkpoint must
     reproduce the arch='locotrack' numbers exactly. That is a pipeline-level identity
     check, not just a model-level one.
     """
     if ROOT not in sys.path:
         sys.path.insert(0, ROOT)
-    from dbtrack.model.dbtrack_model import load_dbtrack  # type: ignore
-    return load_dbtrack(ckpt_path, model_size=model_size, device=device, **kw)
+    from jefftrack.model.jefftrack_model import load_jefftrack  # type: ignore
+    return load_jefftrack(ckpt_path, model_size=model_size, device=device, **kw)
 
 
 def _load_locotrack(ckpt_path: str, model_size: str, device: str):
@@ -104,7 +104,7 @@ def _load_locotrack(ckpt_path: str, model_size: str, device: str):
     return model.to(device).eval()
 
 
-class DBTrackEngine:
+class JeffTrackEngine:
     """LocoTrack, fed and read in raster coordinate conventions.
 
     Coordinates in:  queries are [frame, x, y] in the pixel space of the frames handed in.
@@ -133,7 +133,7 @@ class DBTrackEngine:
         # here rather than letting a silently-shifted grid become a tracking error.
         self.model_res = (int(model_res[0]) // 8 * 8, int(model_res[1]) // 8 * 8)
         if self.model_res != (int(model_res[0]), int(model_res[1])):
-            print("[dbtrack] model_res {}x{} snapped to {}x{} (must be a multiple of 8)"
+            print("[jefftrack] model_res {}x{} snapped to {}x{} (must be a multiple of 8)"
                   .format(model_res[0], model_res[1], *self.model_res))
         self.query_chunk_size = int(query_chunk_size)
         # window=0 means "decide from the clip length and the model resolution". LocoTrack
@@ -144,12 +144,12 @@ class DBTrackEngine:
         self.ckpt = ckpt or DEFAULT_CKPT
         if not os.path.isfile(self.ckpt):
             raise SystemExit("[ERROR] checkpoint not found: {}".format(self.ckpt))
-        if arch not in ("locotrack", "dbtrack"):
+        if arch not in ("locotrack", "jefftrack"):
             raise SystemExit("[ERROR] unknown arch {!r}".format(arch))
         self.arch = arch
         self.model = (_load_locotrack(self.ckpt, model_size, self.device)
                       if arch == "locotrack"
-                      else _load_dbtrack(self.ckpt, model_size, self.device))
+                      else _load_jefftrack(self.ckpt, model_size, self.device))
         self.model_size = model_size
 
     # ------------------------------------------------------------------ preprocessing
@@ -334,7 +334,7 @@ def _selftest(model_size: str, model_res, ckpt: Optional[str], window: int = 0) 
                     for x in np.linspace(m, W - m, 5)], np.float32)
     q = np.concatenate([np.zeros((len(pts), 1), np.float32), pts], 1)
 
-    eng = DBTrackEngine(device="cuda", model_size=model_size, model_res=model_res,
+    eng = JeffTrackEngine(device="cuda", model_size=model_size, model_res=model_res,
                         ckpt=ckpt, window=window)
     tracks, vis, conf = eng.track_queries_conf(frames, q)
 
@@ -360,7 +360,7 @@ def _selftest(model_size: str, model_res, ckpt: Optional[str], window: int = 0) 
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="DBtracker engine (LocoTrack, Apache-2.0)")
+    ap = argparse.ArgumentParser(description="Jeff-Tracker engine (LocoTrack, Apache-2.0)")
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--model-size", default="base", choices=["small", "base"])
     ap.add_argument("--model-res", default="256x256",

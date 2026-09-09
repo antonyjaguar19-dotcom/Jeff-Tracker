@@ -1,6 +1,6 @@
 """Download checkpoints from the Hugging Face Hub into weights/.
 
-    python fetch_weights.py                 # the shipping DBtracker checkpoint
+    python fetch_weights.py                 # the shipping Jeff-Tracker checkpoint
     python fetch_weights.py --all           # plus the LocoTrack baseline
 
 Weights are hosted on the Hub rather than committed here, which is what the models this
@@ -8,7 +8,7 @@ one descends from do: LocoTrack publishes to `hamacojr/LocoTrack-pytorch-weights
 66 MB blob per checkpoint would sit in git history forever for no benefit.
 
 The LocoTrack baseline is what `--arch locotrack` loads, and reproducing the baseline rows
-in METHOD.md needs it. Everything else is a DBtracker checkpoint.
+in METHOD.md needs it. Everything else is a Jeff-Tracker checkpoint.
 """
 from __future__ import annotations
 
@@ -20,15 +20,15 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)          # the repo root, one level up
 WEIGHTS = os.path.join(ROOT, "weights")
 
-# The DBtracker checkpoints. Set BTR_HF_REPO to point at a fork or a private mirror.
-HF_REPO = os.environ.get("BTR_HF_REPO", "antonyjaguar19-dotcom/DBtracker")
+# The Jeff-Tracker checkpoints. Set JEFFTRACK_HF_REPO to point at a fork or a private mirror.
+HF_REPO = os.environ.get("JEFFTRACK_HF_REPO", "antonyjaguar19-dotcom/Jeff-Tracker")
 
 # LocoTrack's own release, Apache-2.0, published by the LocoTrack authors as a dataset
 # repo rather than a model repo.
 LOCO_REPO = "hamacojr/LocoTrack-pytorch-weights"
 LOCO_TYPE = "dataset"
 
-DBTRACK_FILES = ["inf_s4000.ckpt"]
+JEFFTRACK_FILES = ["inf_s4000.ckpt"]
 LOCO_FILES = ["locotrack_base.ckpt", "locotrack_small.ckpt"]
 
 
@@ -46,23 +46,23 @@ def grab(repo_id: str, filename: str, repo_type: str = "model") -> str:
             "        If you are publishing your own checkpoints, upload them with\n"
             "          hf auth login\n"
             "          hf upload {} weights/{} {}\n"
-            "        or point this script elsewhere with BTR_HF_REPO."
+            "        or point this script elsewhere with JEFFTRACK_HF_REPO."
             .format(repo_id, filename, type(exc).__name__, repo_id, filename, filename))
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="fetch DBtracker checkpoints")
+    ap = argparse.ArgumentParser(description="fetch Jeff-Tracker checkpoints")
     ap.add_argument("--all", action="store_true",
                     help="also fetch the LocoTrack baseline weights")
     ap.add_argument("--baseline-only", action="store_true",
                     help="fetch ONLY the LocoTrack baseline (works without the "
-                         "DBtracker repo existing)")
+                         "Jeff-Tracker repo existing)")
     a = ap.parse_args()
 
     os.makedirs(WEIGHTS, exist_ok=True)
     got = []
     if not a.baseline_only:
-        for f in DBTRACK_FILES:
+        for f in JEFFTRACK_FILES:
             got.append(grab(HF_REPO, f))
     if a.all or a.baseline_only:
         for f in LOCO_FILES:

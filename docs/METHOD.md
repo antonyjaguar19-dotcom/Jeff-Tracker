@@ -1,6 +1,6 @@
 # Method and measurements
 
-Everything DBtracker claims, how it was measured, and the things that did not work. The
+Everything Jeff-Tracker claims, how it was measured, and the things that did not work. The
 negative results are here on purpose: a page that only lists wins is not evidence, and two
 of the most useful findings in this project were metrics that looked plausible and were
 measuring the input instead of the tracker.
@@ -18,24 +18,24 @@ Rules this document follows:
 Nothing below is believable without these.
 
 ```
-python -m dbtrack.engine --selftest
+python -m jefftrack.engine --selftest
   median 0.100 px on a known rigid translation with exact GT      PASS
 
 python tools/score_occlusion.py --control
   VISIBLE / OCCLUDED / RE-ACQUIRE worst error 0.00000 px          PASS
 
 python tools/check_identity.py
-  vendor parameters : 147 shared, 0 differ, 0 lost, 63 added by DBTrack
+  vendor parameters : 147 shared, 0 differ, 0 lost, 63 added by Jeff-Tracker
   cross block 0/1/2   out_proj zero: True
   tracks / occlusion / expected_dist   max |diff| 0.000e+00   identical True
-  PASS  untrained DBTrack is LocoTrack
+  PASS  untrained Jeff-Tracker is LocoTrack
   5,789,952 cross-track parameters added to 17,309,669 total (33.4%)
 ```
 
 The identity property is the one that makes every later number interpretable. Without it,
 a change measured after training is a mixture of "cross-track attention helped" and "the
 port moved something", with no way to separate the two afterwards. It holds at the pipeline
-level too: the same occlusion bench through `--arch dbtrack` produces a **byte-identical
+level too: the same occlusion bench through `--arch jefftrack` produces a **byte-identical
 export** to `--arch locotrack`.
 
 ## The port, against the authors' own published numbers
@@ -107,7 +107,7 @@ introduced.
 The figure above is raw neural output over all 600 seeds with no refinement stage. A
 classical pipeline — moving-tile re-track at native resolution, then NCC + affine sub-pixel
 polish — over the handful of seeds that survive its quality gates reaches 0.06 px on the
-same bench. The honest reading is that DBtracker is a seed-and-track stage that would still
+same bench. The honest reading is that Jeff-Tracker is a seed-and-track stage that would still
 feed such a refinement downstream, not a replacement for it.
 
 ## Real footage
@@ -211,7 +211,7 @@ silently in this state. The engine now snaps and says so.
 
 ## Cross-track attention
 
-`dbtrack/model/cross_track.py`. Attention over the **track** axis, run independently per
+`jefftrack/model/cross_track.py`. Attention over the **track** axis, run independently per
 frame, mediated by 16 learned proxy tokens so cost is O(N·K) rather than O(N²). Tracks are
 a set, not a sequence, so there is no positional encoding and no causal mask — either would
 assert an order between track 7 and track 8 that does not exist.
@@ -219,7 +219,7 @@ assert an order between track 7 and track 8 that does not exist.
 Written from the description in the CoTracker3 paper (arXiv 2410.11831). No file, function,
 or weight tensor derives from the CoTracker repository.
 
-`dbtrack/model/dbtrack_model.py` re-parents LocoTrack's own `input_proj`, `transformer` and
+`jefftrack/model/jefftrack_model.py` re-parents LocoTrack's own `input_proj`, `transformer` and
 `output_proj` — the same module objects, not rebuilt — and unrolls the vendor's layer loop
 so a cross-track block can sit between layers. Parameter names are therefore unchanged and
 the published checkpoint loads with the new `cross.*` keys as the only additions.
@@ -284,7 +284,7 @@ training under that objective can teach a model to cross an occlusion**, regardl
 attention is bolted on.
 
 CoTracker3 weights occluded points at one fifth instead of zero — the `(𝟙_occ/5 + 𝟙_vis)`
-term in its loss. `dbtrack/losses.py` implements that weighting from the paper's formula
+term in its loss. `jefftrack/losses.py` implements that weighting from the paper's formula
 and is otherwise the vendor's arithmetic line for line. Verified to reduce to it exactly:
 
 ```

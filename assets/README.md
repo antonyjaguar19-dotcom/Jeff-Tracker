@@ -92,3 +92,10 @@ line implies a path that was never travelled.
 This is a display choice, not a claim about the model. It still emits those positions; the
 coverage figures in [`../docs/METHOD.md`](../docs/METHOD.md) are what quantify how often it
 declines to commit.
+
+## The logo
+
+`logo.png` is the project's own mark, supplied by the repository owner. It is cropped from
+the original render and downscaled to 1100 px wide; nothing else about it is changed. It is
+not part of the Apache-2.0 grant that covers the code — the licence in `LICENSE` applies to
+software, not to a trademark or logo.

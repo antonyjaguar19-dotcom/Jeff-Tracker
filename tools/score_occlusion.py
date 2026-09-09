@@ -17,7 +17,7 @@ average across both would have shown a modest gain and hidden the entire effect.
 
     python score_occlusion.py --control
     python score_occlusion.py ^
-        --shot bench\\synth\\lab02_occ --bot out\\lab02_occ__dbtrack.txt
+        --shot bench\\synth\\lab02_occ --bot out\\lab02_occ__jefftrack.txt
 
 --control feeds the scorer ground truth as if it were a tracker's export. Every error must
 come back ~0. Both metric defects found in 2026-08 were metrics that looked plausible and
@@ -83,7 +83,7 @@ def score(shot: str, bot_path: str, reacq: int, first_frame: int, control: bool)
 
     tracks = load_tracks(bot_path)
     # 3DE ASCII is bottom-left origin; the homography works in raster coords. Flip on the
-    # way in, the exact mirror of run_dbtrack.write_3de.
+    # way in, the exact mirror of run_jefftrack.write_3de.
     seq = {}
     for name, tr in tracks.items():
         fr = sorted(tr)

@@ -3,14 +3,14 @@
 The occlusion bench turned up a split personality at 384x680: median visible error 0.70 px
 and mean 40.6 px, i.e. most samples are better than the 256x256 run and a few are hundreds
 of pixels out. That tail is only a problem if it cannot be identified. LocoTrack emits a
-per-frame confidence (1 - P(occluded or uncertain), see dbtrack.engine._infer), so the
+per-frame confidence (1 - P(occluded or uncertain), see jefftrack.engine._infer), so the
 question has an answer that can be measured rather than argued.
 
-This reads the .npz that run_dbtrack writes -- which keeps the continuous confidence, the
+This reads the .npz that run_jefftrack writes -- which keeps the continuous confidence, the
 thing a visibility-logit threshold throws away -- and scores it against the bench homography.
 
     python probe_conf.py ^
-        --npz out\\lab02_occ_384x680__dbtrack.npz --shot bench\\synth\\lab02_occ
+        --npz out\\lab02_occ_384x680__jefftrack.npz --shot bench\\synth\\lab02_occ
 
 Reported: error by confidence bucket, the AUC of confidence as a detector of a bad frame,
 and what a threshold actually buys -- how much of the tail it removes and how much good

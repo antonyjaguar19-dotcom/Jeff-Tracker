@@ -77,3 +77,23 @@ permitted is your call to make, and the script says so at the top.
 Publishing measured comparisons against published work is ordinary practice — CoTracker3's
 own paper tabulates competitors the same way — and a measurement is a fact about a model,
 not a derivative of its source code.
+
+## Gated weights, and what gating does not do
+
+The trained checkpoint is distributed from a **gated** Hugging Face repository: access is
+requested and granted per person. Two things follow, and the second is the one worth being
+clear about.
+
+**What it does.** It controls who receives the file *from us*, and it records who asked and
+what they said they intended to use it for. That is its purpose: knowing the userbase.
+
+**What it does not do.** The checkpoint is released under **Apache-2.0**, the same licence
+as the code. Apache-2.0 permits redistribution, so a person who has been granted access may
+lawfully pass the file on. Gating therefore controls the first hop and not the ones after
+it. Anyone who wants redistribution actually restricted needs to release the weights under
+their own terms rather than Apache-2.0 — which Apache-2.0 §4 permits for a derivative work,
+provided `LICENSE` and `NOTICE` still travel with it — and that is a licensing decision, not
+a hosting one. It has not been taken here.
+
+The base LocoTrack weights this is fine-tuned from remain ungated and Apache-2.0 at their
+own source, so nothing about this arrangement restricts access to upstream work.

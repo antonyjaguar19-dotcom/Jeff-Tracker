@@ -18,9 +18,21 @@ dependencies = ["torch", "einops", "numpy", "cv2"]
 
 
 def _ckpt(filename, repo_id=None, repo_type="model"):
+    """Resolve a checkpoint from the Hub.
+
+    The weights repo is gated, so this needs a logged-in account that has been granted
+    access (`hf auth login`). An unauthorised request comes back as 'not found', which is
+    a misleading thing to hand a user, so it is re-raised as what it actually is.
+    """
     from huggingface_hub import hf_hub_download          # noqa: PLC0415
     repo_id = repo_id or os.environ.get("JEFFTRACK_HF_REPO", "antonyjaguar19-dotcom/Jeff-Tracker")
-    return hf_hub_download(repo_id=repo_id, filename=filename, repo_type=repo_type)
+    try:
+        return hf_hub_download(repo_id=repo_id, filename=filename, repo_type=repo_type)
+    except Exception as exc:                             # noqa: BLE001
+        raise RuntimeError(
+            "could not fetch {} from {}: {}. The weights are gated -- request access at "
+            "https://huggingface.co/{} and run `hf auth login`. To use a local file "
+            "instead, pass ckpt=/path/to.ckpt.".format(filename, repo_id, exc, repo_id))
 
 
 def jefftracker(pretrained: bool = True, model_res=(256, 256), device: str = "cuda",

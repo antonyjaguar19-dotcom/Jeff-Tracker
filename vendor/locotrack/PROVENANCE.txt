@@ -1,0 +1,5 @@
+Copied from https://github.com/cvlab-kaist/locotrack
+commit 3385a233a270160b253a69050c6a3934527f7775
+fetched 2026-09-08
+licence Apache-2.0 (Copyright 2024 KU-CVLAB) -- see LICENSE
+only locotrack_pytorch/ + LICENSE + README.md were taken; the JAX tree and assets were not.

@@ -31,7 +31,7 @@ def dbtracker(pretrained: bool = True, model_res=(256, 256), device: str = "cuda
     and a tail of confident, badly wrong tracks appears with it; METHOD.md has the
     numbers. Raise it only if you are gating on the returned confidence.
     """
-    from dbtrack_engine import DBTrackEngine              # noqa: PLC0415
+    from dbtrack.engine import DBTrackEngine              # noqa: PLC0415
     path = ckpt or (_ckpt("inf_s4000.ckpt") if pretrained else None)
     return DBTrackEngine(device=device, model_size="base", ckpt=path,
                          model_res=model_res, arch="dbtrack", **kw)
@@ -44,7 +44,7 @@ def locotrack(pretrained: bool = True, model_res=(256, 256), device: str = "cuda
     With cross-track attention zero-initialised, `dbtracker(pretrained=False)` and this
     are the same function to 0.000e+00 -- check_identity.py asserts it.
     """
-    from dbtrack_engine import DBTrackEngine              # noqa: PLC0415
+    from dbtrack.engine import DBTrackEngine              # noqa: PLC0415
     path = ckpt or (_ckpt("locotrack_base.ckpt",
                           repo_id="hamacojr/LocoTrack-pytorch-weights",
                           repo_type="dataset") if pretrained else None)

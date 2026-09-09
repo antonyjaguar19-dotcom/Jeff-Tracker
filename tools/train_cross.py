@@ -31,8 +31,9 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-if HERE not in sys.path:
-    sys.path.insert(0, HERE)
+ROOT = os.path.dirname(HERE)
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 
 from dbtrack.paths import add_vendor_to_path  # noqa: E402
 
@@ -43,7 +44,7 @@ import torch  # noqa: E402
 
 from dbtrack.losses import tapir_loss_weighted  # noqa: E402
 from dbtrack.model.dbtrack_model import load_dbtrack  # noqa: E402
-from dbtrack_engine import DEFAULT_CKPT  # noqa: E402
+from dbtrack.engine import DEFAULT_CKPT  # noqa: E402
 
 
 def main() -> int:

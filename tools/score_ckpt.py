@@ -24,9 +24,10 @@ import sys
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = HERE
+ROOT = os.path.dirname(HERE)          # the repo root, one level up
+REPO = ROOT
 PY = sys.executable
-TSV = os.path.join(HERE, "out", "ckpt_scores.tsv")
+TSV = os.path.join(ROOT, "out", "ckpt_scores.tsv")
 
 
 def run(cmd):

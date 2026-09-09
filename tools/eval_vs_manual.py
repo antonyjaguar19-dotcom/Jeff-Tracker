@@ -29,8 +29,9 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = HERE
-for _p in (HERE, REPO):
+ROOT = os.path.dirname(HERE)          # the repo root, one level up
+REPO = ROOT
+for _p in (ROOT, HERE):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
@@ -40,8 +41,8 @@ import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
 from app.compare_tracks import load_tracks  # noqa: E402
-from dbtrack_engine import DBTrackEngine, DEFAULT_CKPT  # noqa: E402
-from run_dbtrack import list_frames, read_frame  # noqa: E402
+from dbtrack.engine import DBTrackEngine, DEFAULT_CKPT  # noqa: E402
+from dbtrack.io import list_frames, read_frame  # noqa: E402
 
 
 def main() -> int:

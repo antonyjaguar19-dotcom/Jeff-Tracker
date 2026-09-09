@@ -32,8 +32,9 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = HERE
-for _p in (HERE, REPO):
+ROOT = os.path.dirname(HERE)          # the repo root, one level up
+REPO = ROOT
+for _p in (ROOT, HERE):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 

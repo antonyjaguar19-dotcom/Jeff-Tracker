@@ -9,3 +9,4 @@ __pycache__/
 *.ckpt
 *.pth
 *.npz
+*.mp4

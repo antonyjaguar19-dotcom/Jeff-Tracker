@@ -23,7 +23,7 @@ directly, so this engine keeps it.
 
 Self-check (no plate needed, falls back to CPU if there is no GPU):
 
-    python dbtrack_engine.py --selftest
+    python -m dbtrack.engine --selftest
 """
 from __future__ import annotations
 
@@ -33,8 +33,11 @@ import sys
 from typing import Optional, Tuple
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PYDEPS = os.path.join(HERE, "pydeps")
-VENDOR_PT = os.path.join(HERE, "vendor", "locotrack", "locotrack_pytorch")
+# engine.py lives inside the package, so the repo root -- which is what holds
+# vendor/, weights/ and pydeps/ -- is one level up.
+ROOT = os.path.dirname(HERE)
+PYDEPS = os.environ.get("DBTRACK_PYDEPS", os.path.join(ROOT, "pydeps"))
+VENDOR_PT = os.path.join(ROOT, "vendor", "locotrack", "locotrack_pytorch")
 # pydeps first: the embeddable runtime is in isolated mode, so PYTHONPATH is ignored and
 # the only way these land on the path is from inside the process. Same reason and same
 # order as experiments/track_on/run_trackon.py:36-43.
@@ -48,7 +51,8 @@ import cv2  # noqa: E402
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
-DEFAULT_CKPT = os.path.join(HERE, "weights", "locotrack_base.ckpt")
+DEFAULT_CKPT = os.environ.get(
+    "DBTRACK_CKPT", os.path.join(ROOT, "weights", "locotrack_base.ckpt"))
 
 # LocoTrack was trained at 256x256 (LocoTrack.initial_resolution). Feeding it a larger
 # video does not just upscale -- get_feature_grids() infers a LADDER of refinement
@@ -67,8 +71,8 @@ def _load_dbtrack(ckpt_path: str, model_size: str, device: str, **kw):
     reproduce the arch='locotrack' numbers exactly. That is a pipeline-level identity
     check, not just a model-level one.
     """
-    if HERE not in sys.path:
-        sys.path.insert(0, HERE)
+    if ROOT not in sys.path:
+        sys.path.insert(0, ROOT)
     from dbtrack.model.dbtrack_model import load_dbtrack  # type: ignore
     return load_dbtrack(ckpt_path, model_size=model_size, device=device, **kw)
 

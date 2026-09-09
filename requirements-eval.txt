@@ -1,0 +1,12 @@
+# Evaluation and training only. Nothing here is imported by dbtrack.engine.
+#
+# TAP-Vid's official metric code (compute_tapvid_metrics, sample_queries_*) lives in
+# LocoTrack's vendored data/evaluation_datasets.py, whose module-level imports pull in
+# tensorflow, tfds, absl, mediapy and scipy -- even though the three functions we call
+# are pure numpy. Using the reference implementation rather than reimplementing the
+# metric is the right trade, so the dependency is inherited rather than argued with.
+absl-py
+mediapy
+scipy
+tensorflow-cpu
+tensorflow_datasets

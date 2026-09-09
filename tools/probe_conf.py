@@ -3,7 +3,7 @@
 The occlusion bench turned up a split personality at 384x680: median visible error 0.70 px
 and mean 40.6 px, i.e. most samples are better than the 256x256 run and a few are hundreds
 of pixels out. That tail is only a problem if it cannot be identified. LocoTrack emits a
-per-frame confidence (1 - P(occluded or uncertain), see dbtrack_engine._infer), so the
+per-frame confidence (1 - P(occluded or uncertain), see dbtrack.engine._infer), so the
 question has an answer that can be measured rather than argued.
 
 This reads the .npz that run_dbtrack writes -- which keeps the continuous confidence, the
@@ -23,8 +23,9 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = HERE
-for _p in (HERE, REPO):
+ROOT = os.path.dirname(HERE)          # the repo root, one level up
+REPO = ROOT
+for _p in (ROOT, HERE):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 

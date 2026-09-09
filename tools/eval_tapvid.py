@@ -31,8 +31,9 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-if HERE not in sys.path:
-    sys.path.insert(0, HERE)
+ROOT = os.path.dirname(HERE)
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 
 from dbtrack.paths import add_vendor_to_path  # noqa: E402
 
@@ -46,9 +47,9 @@ import numpy as np  # noqa: E402
 from data.evaluation_datasets import (  # noqa: E402  (vendor, official TAP-Vid code)
     compute_tapvid_metrics, sample_queries_first, sample_queries_strided)
 
-from dbtrack_engine import DBTrackEngine, DEFAULT_CKPT  # noqa: E402
+from dbtrack.engine import DBTrackEngine, DEFAULT_CKPT  # noqa: E402
 
-DEFAULT_PKL = os.path.join(HERE, "data", "tapvid_davis", "tapvid_davis.pkl")
+DEFAULT_PKL = os.path.join(ROOT, "data", "tapvid_davis", "tapvid_davis.pkl")
 
 
 def resize_video(video: np.ndarray, size: int) -> np.ndarray:

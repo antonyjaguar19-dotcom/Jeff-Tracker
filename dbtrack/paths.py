@@ -11,7 +11,7 @@ import os
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PYDEPS = os.path.join(ROOT, "pydeps")
+PYDEPS = os.environ.get("DBTRACK_PYDEPS", os.path.join(ROOT, "pydeps"))
 VENDOR_PT = os.path.join(ROOT, "vendor", "locotrack", "locotrack_pytorch")
 
 

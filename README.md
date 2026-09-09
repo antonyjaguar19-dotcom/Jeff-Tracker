@@ -2,49 +2,70 @@
 
 # DBtracker
 
-**A point tracker in the CoTracker class, licensed so it can actually ship.**
+**An Apache-2.0 point tracker in the CoTracker class.**
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Weights](https://img.shields.io/badge/%F0%9F%A4%97%20weights-Hugging%20Face-yellow)](https://huggingface.co/antonyjaguar19-dotcom/DBtracker)
 [![Base](https://img.shields.io/badge/base-LocoTrack--B-green.svg)](https://github.com/cvlab-kaist/locotrack)
 [![DAVIS](https://img.shields.io/badge/TAP--Vid%20DAVIS-67.7%20AJ-orange.svg)](docs/METHOD.md)
 
-<img src="assets/demo_grid.gif" width="90%" alt="DBtracker tracking a dense grid through a DAVIS clip">
-
-*A 14×14 grid carried through `breakdance`. [Footage: DAVIS, CC BY 4.0](assets/README.md).*
+<img src="assets/demo_grid.gif" width="88%" alt="DBtracker tracking a dense grid through a DAVIS clip">
 
 </div>
 
 ---
 
-Every part of DBtracker is **Apache-2.0** — model code, base weights, and training data.
-That is the entire reason it exists. The strongest open point trackers (CoTracker,
-CoTracker3, MFT, SpatialTracker) are CC-BY-NC on code *and* weights, and NonCommercial
-restricts **use**, not just redistribution, so "we only run it in-house" does not make them
-safe in a commercial pipeline.
+The strongest open point trackers — CoTracker3, MFT, SpatialTracker — are **CC-BY-NC** on
+code *and* weights. NonCommercial restricts **use**, not just redistribution, so "we only
+run it in-house" does not make them safe in a commercial pipeline.
 
-**Foundation:** [LocoTrack-B](https://github.com/cvlab-kaist/locotrack) (ECCV 2024,
-Apache-2.0), plus cross-track attention written from the CoTracker3 paper
+DBtracker is [LocoTrack-B](https://github.com/cvlab-kaist/locotrack) (Apache-2.0) plus
+cross-track attention, written from the CoTracker3 paper
 ([arXiv:2410.11831](https://arxiv.org/abs/2410.11831)) and fine-tuned on Apache-2.0 MOVi-E.
-No code, weights or tensors here derive from the CoTracker repository — architecture is not
-copyrightable, source code is. Ledger: [docs/LICENSES.md](docs/LICENSES.md).
+Code, base weights and training data are Apache-2.0 end to end. No CoTracker code, weights
+or tensors are in this repository — architecture is not copyrightable, source code is.
 
-## Results
+## Benchmark
 
-| | DBtracker |
-|---|---|
-| Localisation, exact synthetic ground truth | **1.03 px** @ 256×256 · **0.54 px** @ 384×680 |
-| Pixel locking | **+0.0005 px** — none, on an NCC-free path |
-| TAP-Vid DAVIS strided (AJ / δ_avg / OA) | **67.7 / 79.5 / 89.8** |
-| Confidence as a bad-frame detector | **AUC 0.955** @ 256×256 |
-| Speed | **0.030 s/frame** · 312 frames of 4K · 6.85 GB peak |
-| Occluded within 5 px, vs the LocoTrack base | **+3.4 points**, held out over three benches |
-| Visible accuracy vs base | **−0.03 px** at every checkpoint |
+TAP-Vid DAVIS, 30 clips, 256×256, the reference metric called unmodified.
 
-The DAVIS row is the load-bearing one. LocoTrack-B **as published** is 67.8 / 79.6 / 89.9,
-so this port is within **0.1 on all three metrics** — which is what makes every other number
-here worth reading. Full measurements, controls and negative results:
-**[docs/METHOD.md](docs/METHOD.md)**.
+<img src="assets/benchmark.png" width="100%" alt="AJ, delta_avg and OA for the three trackers, and accuracy against cost">
+
+<img src="assets/compare_three.gif" width="100%" alt="the three trackers on the same clip with the same seeds">
+
+*Same clip, same seeds, same overlay code — so what differs is the trackers.*
+
+| model | licence | AJ | δ_avg | OA | s/frame |
+|---|---|---|---|---|---|
+| **TAPNext++** | Apache-2.0 | **66.2** | **79.4** | **92.1** | 0.2440 |
+| DBtracker | Apache-2.0 | 62.6 | 74.9 | 86.7 | **0.0065** |
+| CoTracker3 | CC-BY-NC | 61.9 | 76.8 | 87.5 | 0.0264 |
+
+**TAPNext++ is the most accurate model here, and it is also Apache-2.0.** That is not the
+result this project set out to find, and it goes first because burying it would make
+everything else here less trustworthy. If accuracy is all that matters and the licence must
+be clean, use TAPNext++.
+
+DBtracker's case is cost: **37× faster** at 3.6 AJ behind, plus a calibrated per-frame
+confidence neither of the others returns. Against CoTracker3 — the model whose licence
+motivated the project — it is +0.7 AJ and −1.9 δ_avg at a quarter of the cost.
+
+Two caveats that belong next to the table, not in a footnote: the ranking is unchanged
+under a second protocol (no model moves more than 0.5 AJ), and **CoTracker3 measures below
+its published figure here** — resolution was ruled out as the cause (+0.6 AJ), the metric
+definition is the likely reason, and the row should be read as "as configured here" rather
+than as a refutation of its paper.
+
+Reproduce, and read [docs/BENCHMARK.md](docs/BENCHMARK.md) before quoting any of it:
+
+```bash
+python tools/benchmark.py --models dbtracker,tapnext,cotracker3 --whole-clip \n    --out out/benchmark_whole.json
+python tools/plot_benchmark.py --json out/benchmark_whole.json --out assets/benchmark.png
+```
+
+Only DBtracker is built in. TAPNext++ and CoTracker3 are loaded from paths you supply;
+neither is vendored here, and **CoTracker3 is CC-BY-NC — running it is your licence call,
+not this repository's.**
 
 ## Two things it does not do
 
@@ -63,14 +84,14 @@ all, and after 8 frames the track retires. The limitation, drawn rather than des
 </tr>
 </table>
 
-**Use 256×256 unless you have measured otherwise.** Raising the model resolution lowers the
-median and raises the tail. At 384×680 the median visible error improves to 0.697 px while
-the *mean* is 40.6 px — and **no confidence threshold recovers it**: at conf ≥ 0.99 the mean
-is still 39.3 px. Confident and wrong is the worst failure mode there is.
+Two more, stated plainly:
 
-**It is a seed-and-track stage, not a finished pipeline.** The 1.03 px figure is raw neural
-output over every seed with no refinement. A classical sub-pixel pass downstream still buys
-most of an order of magnitude.
+- **Use `--model-res 256x256`.** Higher lowers the median and raises the tail. At 384×680
+  the median visible error improves to 0.697 px while the *mean* is 40.6 px, and no
+  confidence threshold recovers it — at conf ≥ 0.99 the mean is still 39.3 px.
+- **It is a seed-and-track stage, not a finished pipeline.** Its 1.03 px synthetic figure
+  is raw neural output with no refinement; a classical sub-pixel pass downstream still buys
+  most of an order of magnitude.
 
 ## Install
 
@@ -82,9 +103,8 @@ pip install -r requirements.txt
 python tools/fetch_weights.py --all
 ```
 
-LocoTrack is vendored under `vendor/locotrack/` (Apache-2.0, LICENSE and PROVENANCE
-retained), so there is nothing else to clone. Weights live on the Hugging Face Hub rather
-than in git — the arrangement LocoTrack and CoTracker both use.
+LocoTrack is vendored under `vendor/locotrack/`, so there is nothing else to clone. Weights
+are on the Hugging Face Hub, not in git.
 
 ## Use
 
@@ -95,40 +115,32 @@ tracker = torch.hub.load("antonyjaguar19-dotcom/DBtracker", "dbtracker").cuda()
 # frames: (T, H, W, 3) uint8 BGR      queries: (N, 3) as [frame, x, y]
 tracks, vis, conf = tracker.track_queries_conf(frames, queries)
 # tracks (T, N, 2) xy in the input frames' pixel space, y DOWN
-# vis    (T, N) bool   -- conf >= 0.5, the vendor's own threshold
+# vis    (T, N) bool   -- conf >= 0.5
 # conf   (T, N) float  -- 1 - P(occluded or uncertain), continuous
 ```
 
-On a directory of frames, straight to 3DE-style 2D-track ASCII plus an overlay mp4:
+A directory of frames straight to 3DE-style 2D-track ASCII plus an overlay mp4:
 
 ```bash
 python tools/run_dbtrack.py --plate /path/to/frames --name myshot --seed corners --points 600
 ```
 
-### The two resolution knobs are not the same knob
+## Verify
 
-- `--work-width` — what frames are decoded and held at. Saves host RAM. The model never
-  sees it.
-- `--model-res` — what the model actually runs at, and therefore what bounds precision. It
-  was trained at 256×256. On a 2560-wide plate one model pixel at 256×256 is **ten plate
-  pixels**, which is where the ~1 px synthetic floor comes from.
-
-## Verify it before believing it
-
-No number in [docs/METHOD.md](docs/METHOD.md) is quoted without a control pass that returns
+Every number in [docs/METHOD.md](docs/METHOD.md) has a control pass behind it that returns
 a value which *should* be zero. Both metric defects found while building this were metrics
-measuring the input instead of the tracker, and each was caught exactly this way.
+measuring the input instead of the tracker, and each was caught this way.
 
 ```bash
-python -m dbtrack.engine --selftest     # rigid translation, exact GT -> 0.100 px
-python tools/check_identity.py          # untrained DBtrack IS LocoTrack, 0.000e+00
+python -m dbtrack.engine --selftest         # rigid translation, exact GT -> 0.100 px
+python tools/check_identity.py              # untrained DBtrack IS LocoTrack -> 0.000e+00
 python tools/score_occlusion.py --control   # scorer against truth -> 0.00000 px
-python tools/eval_tapvid.py --mode strided  # the port, against published numbers
+python tools/eval_tapvid.py --mode strided  # the port -> 67.7 / 79.5 / 89.8
 ```
 
-`check_identity.py` is the load-bearing one. With cross-track attention zero-initialised the
-model is LocoTrack **bit for bit**, so any change measured after training is attributable to
-the new blocks and not to the port having moved something.
+`check_identity.py` is the load-bearing one: with cross-track attention zero-initialised the
+model is LocoTrack bit for bit, so anything measured after training is attributable to the
+new blocks rather than to the port.
 
 ## Train
 
@@ -138,42 +150,28 @@ python tools/train_cross.py --occ-pos-weight 0.2 --steps 4000
 python tools/score_ckpt.py --ckpt weights/step4000.ckpt --tag s4000
 ```
 
-`freeze_base()` trains the 5.8M cross-track parameters and leaves the 11.5M vendor weights
-bit-identical. `--occ-pos-weight` is the flag the whole result turns on: `0.0` is the
-vendor's objective, which zeroes the position loss on occluded frames and therefore
-*cannot* teach a model to cross an occlusion whatever attention you bolt on. `0.2` is
-CoTracker3's `(𝟙_occ/5 + 𝟙_vis)` weighting, implemented from the paper's formula.
-
-~2 s/step at 2.3 GB on an RTX A4000.
+`--occ-pos-weight` is the flag the whole result turns on: `0.0` is the vendor objective,
+which zeroes the position loss on occluded frames and therefore cannot teach a model to
+cross an occlusion whatever attention you add. `0.2` is CoTracker3's `(𝟙_occ/5 + 𝟙_vis)`
+weighting, implemented from the paper's formula. ~2 s/step at 2.3 GB on an RTX A4000.
 
 ## Layout
 
 ```
-dbtrack/            the package
-  engine.py           DBTrackEngine -- the inference surface
-  io.py               plate I/O, seeding, overlay, 3DE export
-  losses.py           tapir_loss with the occluded-position weighting
-  model/              cross_track.py, dbtrack_model.py
-  data/               MOVi-E reader
-tools/              every CLI: run, train, eval, the control passes, make_demo
-docs/               METHOD.md (measurements), LICENSES.md (provenance)
-assets/             README GIFs + their source attribution
-vendor/locotrack/   LocoTrack, redistributed under Apache-2.0
+dbtrack/   engine.py  io.py  losses.py  model/  data/
+tools/     run, train, benchmark, demos, control passes
+docs/      METHOD.md (measurements)  BENCHMARK.md (protocol)  LICENSES.md (provenance)
+assets/    README media + source attribution
+vendor/    LocoTrack, redistributed Apache-2.0
 ```
 
 ## Licence
 
-Apache-2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
-[docs/LICENSES.md](docs/LICENSES.md) is the artifact-by-artifact ledger, including the one
-open item: the base LocoTrack weights rest on the LocoTrack authors' own Apache-2.0
-declaration, which is theirs to make.
-
-Demo footage is DAVIS (CC BY 4.0) — attribution and the changes made are recorded in
-[assets/README.md](assets/README.md).
+Apache-2.0 — [LICENSE](LICENSE), [NOTICE](NOTICE), and
+[docs/LICENSES.md](docs/LICENSES.md) for the artifact-by-artifact ledger.
+Demo footage is DAVIS (CC BY 4.0); attribution in [assets/README.md](assets/README.md).
 
 ## Citing
-
-DBtracker derives from LocoTrack and reimplements an idea from CoTracker3. Cite both:
 
 ```bibtex
 @inproceedings{cho2024locotrack,

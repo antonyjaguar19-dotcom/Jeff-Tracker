@@ -121,18 +121,67 @@ Against CoTracker3 at that resolution:
 did not close it. This is the real remaining gap and it is the one cross-track attention was
 added to attack.
 
-**The tail, and it is not close.** CoTracker3's worst visible error is **5.4–5.8 px on every
-bench** — a flat line across four independent occluder layouts. Jeff-Tracker at 384×512 goes
-6.82 / 30.89 / 91.78 / 19.87.
+**The tail, read ungated.** CoTracker3's worst visible error is 5.4–5.8 px on every bench —
+a flat line across four independent occluder layouts — while Jeff-Tracker at 384×512 goes
+6.82 / 30.89 / 91.78 / 19.87. **But this row is not coverage-fair and the conclusion
+reverses once it is; see [At matched coverage](#at-matched-coverage-the-fair-tail-comparison).**
 
 Note the direction: raising the resolution *improved* the worst case on lab02_occ
 (16.86 → 6.82) and made it **worse** on occ11 and occ12 (15.23 → 30.89, 36.35 → 91.78). High
 resolution halves the typical error and multiplies the worst one.
 
-> **So 384×512 is not a free upgrade.** Before running it on real work, check whether the
-> model's own confidence still flags the divergent tracks — at 384×680 it does not
-> (`METHOD.md`: at conf ≥ 0.99 the mean error is still 39.3 px). A confident wrong position
-> is worse than a gap. That check is not yet done at 384×512.
+> **That check has now been done, and 384×512 passes it.** See
+> [At matched coverage](#at-matched-coverage-the-fair-tail-comparison) below. At 384×680 no
+> threshold helps (`METHOD.md`: at conf ≥ 0.99 the mean error is still 39.3 px); at 384×512
+> the exporter's own 0.5 gate cuts the worst visible error from 91.78 px to 17.91 px while
+> discarding 0.3% of frames, and 0.99 reaches 4.11 px.
+
+## At matched coverage — the fair tail comparison
+
+The tail numbers above are **not coverage-fair**, and correcting that changes the
+conclusion.
+
+CoTracker3 thresholds visibility at 0.9 **inside its own predictor**, so the positions it
+hands back are already gated. Jeff-Tracker's were raw. A tracker that declines to answer on
+its least certain few percent of frames will always look steadier than one that answers on
+everything — that is a reporting difference, not an accuracy difference.
+
+So: rank every engine's frames by its own confidence, keep the same fraction from each, and
+compare what survives. Visible frames, truth on plate, most-confident **96%** from each
+engine:
+
+| bench | engine | mean | median | p99 | max |
+|---|---|---|---|---|---|
+| lab02_occ | Jeff-Tracker 256×256 | 1.277 | 1.144 | 3.68 | 6.15 |
+| | **Jeff-Tracker 384×512** | **0.665** | **0.605** | **1.83** | **3.65** |
+| | CoTracker3 | 1.234 | 1.156 | 3.07 | 5.38 |
+| | TAPNext++ | 2.665 | 2.451 | 10.43 | 18.65 |
+| occ11 | **Jeff-Tracker 384×512** | **0.697** | **0.630** | **1.92** | **4.29** |
+| | CoTracker3 | 1.297 | 1.226 | 3.20 | 5.38 |
+| occ12 | **Jeff-Tracker 384×512** | **0.719** | **0.638** | **2.12** | **4.11** |
+| | CoTracker3 | 1.330 | 1.241 | 3.41 | 5.42 |
+| occ13 | **Jeff-Tracker 384×512** | **0.718** | **0.643** | **2.06** | **4.30** |
+| | CoTracker3 | 1.356 | 1.282 | 3.36 | 5.83 |
+
+![At matched coverage](../assets/coverage_matched.png)
+
+**At matched coverage Jeff-Tracker at 384×512 takes every column on every bench, including
+the maximum** — roughly 1.9× on the mean, 2× on the median, and 3.65–4.30 px worst against
+5.38–5.83.
+
+Two things stated against interest. For engines whose confidence is a boolean — CoTracker3
+and TAPNext++ — there is no ordering to exploit, so their 96% is an arbitrary subset rather
+than their best; that works against Jeff-Tracker, not for it, and a better selection rule on
+their side could only improve their rows. And the whole comparison is **visible frames
+only**: occluded accuracy is measured on frames the point is hidden, a visible-frame
+coverage match cannot move it, and **CoTracker3 remains about 1.5× better there**. That gap
+is real and is not addressed by anything in this section.
+
+Reproduce with:
+
+```bash
+python tools/bench_coverage.py --coverage 0.96
+```
 
 ## Cost
 

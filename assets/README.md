@@ -93,6 +93,21 @@ This is a display choice, not a claim about the model. It still emits those posi
 coverage figures in [`../docs/METHOD.md`](../docs/METHOD.md) are what quantify how often it
 declines to commit.
 
+## The matched-coverage figure
+
+`coverage_matched.png` is the fair form of the tail comparison, and the reason it exists is
+worth stating: CoTracker3 thresholds visibility at 0.9 inside its own predictor, so reading
+its output against an ungated one compares a gated result with a raw one. The figure ranks
+each engine's frames by that engine's own confidence, keeps the same fraction from every
+engine, and compares what is left.
+
+```bash
+python tools/bench_coverage.py --coverage 0.96
+```
+
+Regenerated from the `.npz` a benchmark run produced, so it cannot drift from the tables in
+[`../docs/COMPARISON.md`](../docs/COMPARISON.md). Contains measurements only, no footage.
+
 ## The comparison score sheets
 
 `comparison_default_settings.png` and `comparison_matched_resolution.png` are generated,

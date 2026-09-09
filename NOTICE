@@ -1,0 +1,37 @@
+DBtracker
+Copyright 2026 DBtracker contributors
+
+This product includes software developed at KU-CVLAB.
+
+  LocoTrack (https://github.com/cvlab-kaist/locotrack)
+  Copyright 2024 KU-CVLAB
+  Licensed under the Apache License, Version 2.0
+
+  The PyTorch implementation is redistributed unmodified under vendor/locotrack/,
+  with its own LICENSE and PROVENANCE.txt retained. DBtracker's model
+  (dbtrack/model/dbtrack_model.py) re-parents LocoTrack's own modules rather than
+  reimplementing them, and the released LocoTrack checkpoints are the starting
+  weights for every DBtracker checkpoint.
+
+LocoTrack is itself derived from TAPIR / tapnet:
+
+  TAPIR (https://github.com/google-deepmind/tapnet)
+  Copyright 2023 DeepMind Technologies Limited
+  Licensed under the Apache License, Version 2.0
+
+Training data preparation uses one file from Kubric:
+
+  Kubric (https://github.com/google-research/kubric)
+  Copyright 2026 The Kubric Authors
+  Licensed under the Apache License, Version 2.0
+
+  challenges/point_tracking/dataset.py -- the add_tracks function, vendored into
+  pydeps/kubric/ at install time rather than pip-installing the full package.
+
+Training data is MOVi-E (movi_e/256x256) from gs://kubric-public/tfds, published
+by Google under the Apache License, Version 2.0.
+
+Cross-track attention (dbtrack/model/cross_track.py) is an independent
+implementation written from the description in "CoTracker3: Simpler and Better
+Point Tracking by Pseudo-Labelling Real Videos" (arXiv:2410.11831). No code,
+weights, or tensors in this repository derive from the CoTracker repository.

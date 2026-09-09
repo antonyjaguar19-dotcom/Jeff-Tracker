@@ -1,0 +1,11 @@
+/pydeps/
+/weights/
+/out/
+/data/
+/refs/
+/bench/
+__pycache__/
+*.pyc
+*.ckpt
+*.pth
+*.npz

@@ -285,8 +285,21 @@ question**, and quoting it in either direction would misrepresent the effect.
 
 **Two real costs.** Occlusion accuracy on DAVIS falls **1.9 points** -- the model commits a
 position where it used to abstain, and OA is the metric for knowing when to keep quiet. And
-peak VRAM nearly doubles: 12.22 GB of a 16 GB card at 400 seeds, on a 312-frame 4K shot.
-VRAM scales with track count, so check headroom at your own seed count first.
+peak VRAM nearly doubles: 12.22 GB of a 16 GB card on a 312-frame 4K shot.
+
+**It does not, however, scale with track count.** An earlier version of this page said to
+check headroom at your own seed count. Measured on the same shot at 384x512:
+
+| seeds | 400 | 625 | 1024 | 1521 | 2025 | 3025 |
+|---|---|---|---|---|---|---|
+| peak VRAM | 12.22 | 12.22 | 12.22 | 12.22 | 12.22 | 12.22 GB |
+| s/frame | 0.040 | 0.055 | 0.072 | 0.098 | 0.125 | 0.182 |
+
+Flat to the last decimal across a 7.5x range. Time scales with seeds; memory does not.
+`query_chunk_size` (64) bounds the track dimension and the engine's auto-window caps the
+temporal window at 120 frames at 384x512, so a longer clip is windowed rather than held
+whole -- 12.22 GB is the cost of one window of feature volume, and neither seed count nor
+clip length moves it.
 
 Same checkpoint in every row. Only `--model-res` moves.
 

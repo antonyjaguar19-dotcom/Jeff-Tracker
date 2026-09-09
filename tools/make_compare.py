@@ -1,7 +1,7 @@
-"""Side-by-side GIF of two or three trackers on the same DAVIS clip, same seeds.
+"""Side-by-side GIF of Jeff-Tracker against another tracker on the same DAVIS clip.
 
     python tools/make_compare.py --clip dance-twirl --out assets/compare.gif \
-        --tapnext-root ... --tapnext-engine ... --cotracker ... --cotracker-ckpt ...
+        --tapnext-root ... --tapnext-engine ...
 
 Every panel is handed the identical frames and the identical query points, and every panel
 is drawn by the same overlay code, so a visible difference is a difference between the
@@ -13,8 +13,6 @@ emits is unconstrained, and drawing that produces markers flying across the pict
 noise presented as output. Occluded points are held at their last committed position and
 retired after `--drop-after` frames.
 
-**CoTracker3 is CC-BY-NC-4.0** and is not vendored here; it is only used if you point this
-at your own copy. TAPNext++ is Apache-2.0.
 """
 from __future__ import annotations
 
@@ -37,13 +35,11 @@ import numpy as np  # noqa: E402
 
 from jefftrack.io import seed_grid, track_colors  # noqa: E402
 from make_demo import load_clip, save_gif  # noqa: E402
-from benchmark import (  # noqa: E402
-    CoTracker3Adapter, JeffTrackerAdapter, TapNextAdapter)
+from benchmark import JeffTrackerAdapter, TapNextAdapter  # noqa: E402
 
 TITLES = {
     "jefftracker": "Jeff-Tracker  (Apache-2.0)",
     "tapnext": "TAPNext++  (Apache-2.0)",
-    "cotracker3": "CoTracker3  (CC-BY-NC)",
 }
 
 
@@ -84,13 +80,11 @@ def main() -> int:
     ap.add_argument("--clip", default="dance-twirl")
     ap.add_argument("--pkl", default=os.path.join(ROOT, "data", "tapvid_davis",
                                                   "tapvid_davis.pkl"))
-    ap.add_argument("--models", default="jefftracker,tapnext,cotracker3")
+    ap.add_argument("--models", default="jefftracker,tapnext")
     ap.add_argument("--out", required=True)
     ap.add_argument("--ckpt", default=os.path.join(ROOT, "weights", "inf_s4000.ckpt"))
     ap.add_argument("--tapnext-root", default="")
     ap.add_argument("--tapnext-engine", default="")
-    ap.add_argument("--cotracker", default="")
-    ap.add_argument("--cotracker-ckpt", default="")
     ap.add_argument("--grid", type=int, default=12)
     ap.add_argument("--frames", type=int, default=50)
     ap.add_argument("--tail", type=int, default=6)
@@ -118,8 +112,6 @@ def main() -> int:
             ad = JeffTrackerAdapter(a.ckpt)
         elif m == "tapnext":
             ad = TapNextAdapter(a.tapnext_root, a.tapnext_engine or None)
-        elif m == "cotracker3":
-            ad = CoTracker3Adapter(a.cotracker, a.cotracker_ckpt)
         else:
             raise SystemExit("[ERROR] unknown model {!r}".format(m))
         tr, vs = ad.track(frames, q)

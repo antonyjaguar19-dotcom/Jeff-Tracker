@@ -26,12 +26,10 @@ import matplotlib.pyplot as plt  # noqa: E402
 COLORS = {
     "jefftracker": "#0072B2",
     "tapnext": "#E69F00",
-    "cotracker3": "#009E73",
 }
 LABEL = {
     "jefftracker": "Jeff-Tracker\n(Apache-2.0)",
     "tapnext": "TAPNext++\n(Apache-2.0)",
-    "cotracker3": "CoTracker3\n(CC-BY-NC)",
 }
 
 

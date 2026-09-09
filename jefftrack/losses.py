@@ -12,11 +12,11 @@ median while occluded-frame error got *worse*, 3.54 -> 3.66 px, and the fraction
 occluded frames landing within 5 px fell from 71.2% to 69.4%. With no gradient there, the
 model is free to drift wherever suits the visible frames.
 
-CoTracker3 weights occluded points at one fifth instead of zero -- the `(1_occ/5 + 1_vis)`
-term in its loss -- which is the difference between "predict where it went" and "ignore it
-until it comes back". That weighting is a formula stated in the paper (arXiv 2410.11831);
-this file is written from that description, and no code here derives from the CoTracker
-repository. See ../LICENSES.md.
+ATTRIBUTION. Weighting occluded points at one fifth instead of zero -- the
+`(1_occ/5 + 1_vis)` term -- is from Karaev et al., arXiv:2410.11831. It is the difference
+between "predict where it went" and "ignore it until it comes back". The weighting is a
+formula stated in that paper; this file is written from the formula, and no code here
+derives from any implementation of it. See ../docs/LICENSES.md.
 
 Everything else is the vendor's arithmetic, deliberately: same Huber with the same delta,
 same coordinate conversion to 256x256, same occlusion BCE, same uncertainty BCE summed over

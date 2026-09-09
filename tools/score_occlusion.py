@@ -1,8 +1,8 @@
 """Score a 3DE export on an occlusion bench: visible vs occluded, and re-acquisition.
 
-Three numbers, kept apart on purpose. CoTracker3's own ablation for cross-track attention
-reports visible and occluded separately (71.3 -> 72.9 visible, 35.9 -> 41.0 occluded); an
-average across both would have shown a modest gain and hidden the entire effect.
+Three numbers, kept apart on purpose. Visible and occluded accuracy move independently
+under cross-track attention -- the occluded term is the one that shifts -- so an average
+across both shows a modest gain and hides the entire effect.
 
   VISIBLE     mean error on frames where ground truth says the point was in clear view.
               This is the localisation number, and it must not get worse.

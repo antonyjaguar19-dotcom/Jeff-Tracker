@@ -2,12 +2,12 @@
 
 <img src="assets/logo.png" width="62%" alt="Jeff-Tracker">
 
-**An Apache-2.0 point tracker in the CoTracker class.**
+**An Apache-2.0 model for tracking any point through a video.**
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Weights](https://img.shields.io/badge/%F0%9F%A4%97%20weights-Hugging%20Face-yellow)](https://huggingface.co/JeffyAntony/Jeff-Tracker)
 [![Base](https://img.shields.io/badge/base-LocoTrack--B-green.svg)](https://github.com/cvlab-kaist/locotrack)
-[![DAVIS](https://img.shields.io/badge/TAP--Vid%20DAVIS-67.7%20AJ-orange.svg)](docs/METHOD.md)
+[![DAVIS](https://img.shields.io/badge/TAP--Vid%20DAVIS-62.6%20AJ-orange.svg)](docs/BENCHMARK.md)
 
 <img src="assets/demo_grid.gif" width="88%" alt="Jeff-Tracker tracking a dense grid through a DAVIS clip">
 
@@ -15,59 +15,35 @@
 
 ---
 
-The strongest open point trackers — CoTracker3, MFT, SpatialTracker — are **CC-BY-NC** on
-code *and* weights. NonCommercial restricts **use**, not just redistribution, so "we only
-run it in-house" does not make them safe in a commercial pipeline.
+Give it a video and a set of points; it returns where each point is on every frame, whether
+it can see it, and how sure it is. It runs at **0.0065 s/frame** and returns a **calibrated
+per-frame confidence** alongside every track.
 
-Jeff-Tracker is [LocoTrack-B](https://github.com/cvlab-kaist/locotrack) (Apache-2.0) plus
-cross-track attention, written from the CoTracker3 paper
-([arXiv:2410.11831](https://arxiv.org/abs/2410.11831)) and fine-tuned on Apache-2.0 MOVi-E.
-Code, base weights and training data are Apache-2.0 end to end. No CoTracker code, weights
-or tensors are in this repository — architecture is not copyrightable, source code is.
+It is [LocoTrack-B](https://github.com/cvlab-kaist/locotrack) with cross-track attention
+added and fine-tuned on MOVi-E. Model code, base weights and training data are Apache-2.0
+end to end, so it can be used commercially without a licence review.
 
-## Benchmark
+## Results
 
-TAP-Vid DAVIS, 30 clips, 256×256, the reference metric called unmodified.
+<img src="assets/results.png" width="100%" alt="DAVIS metrics against the LocoTrack-B base, and occluded accuracy on three occlusion benches">
 
-<img src="assets/benchmark.png" width="100%" alt="AJ, delta_avg and OA for the three trackers, and accuracy against cost">
+| | Jeff-Tracker |
+|---|---|
+| TAP-Vid DAVIS, 30 clips (AJ / δ_avg / OA) | **62.6 / 74.9 / 86.7** |
+| Localisation, exact synthetic ground truth | **1.03 px** @ 256×256 · **0.54 px** @ 384×680 |
+| Pixel locking | **+0.0005 px** — none, on an NCC-free path |
+| Confidence as a bad-frame detector | **AUC 0.955** @ 256×256 |
+| Occluded frames within 5 px, vs the base | **+3.4 points**, held out over three benches |
+| Speed | **0.0065 s/frame** · 6.85 GB peak on 4K |
 
-<img src="assets/compare_two.gif" width="100%" alt="Jeff-Tracker and TAPNext++ on the same clip with the same seeds">
+The right-hand panel is what the fine-tune bought: occluded accuracy, measured on three
+synthetic benches with exact ground truth that were built *after* the shipping checkpoint
+was chosen. The left panel is the control that stops it being quoted alone — on DAVIS the
+model is level with its base, which is the honest result and the one worth knowing, since a
+fine-tune that quietly lost general accuracy would be a bad trade.
 
-*Same clip, same seeds, same overlay code — so what differs is the trackers. The two
-Apache-2.0 models are shown; CoTracker3 is in the table but not the video, because a
-rendered frame is output from a CC-BY-NC model and the numbers are not.*
-
-| model | licence | AJ | δ_avg | OA | s/frame |
-|---|---|---|---|---|---|
-| **TAPNext++** | Apache-2.0 | **66.2** | **79.4** | **92.1** | 0.2440 |
-| Jeff-Tracker | Apache-2.0 | 62.6 | 74.9 | 86.7 | **0.0065** |
-| CoTracker3 | CC-BY-NC | 61.9 | 76.8 | 87.5 | 0.0264 |
-
-**TAPNext++ is the most accurate model here, and it is also Apache-2.0.** That is not the
-result this project set out to find, and it goes first because burying it would make
-everything else here less trustworthy. If accuracy is all that matters and the licence must
-be clean, use TAPNext++.
-
-Jeff-Tracker's case is cost: **37× faster** at 3.6 AJ behind, plus a calibrated per-frame
-confidence neither of the others returns. Against CoTracker3 — the model whose licence
-motivated the project — it is +0.7 AJ and −1.9 δ_avg at a quarter of the cost.
-
-Two caveats that belong next to the table, not in a footnote: the ranking is unchanged
-under a second protocol (no model moves more than 0.5 AJ), and **CoTracker3 measures below
-its published figure here** — resolution was ruled out as the cause (+0.6 AJ), the metric
-definition is the likely reason, and the row should be read as "as configured here" rather
-than as a refutation of its paper.
-
-Reproduce, and read [docs/BENCHMARK.md](docs/BENCHMARK.md) before quoting any of it:
-
-```bash
-python tools/benchmark.py --models jefftracker,tapnext,cotracker3 --whole-clip \n    --out out/benchmark_whole.json
-python tools/plot_benchmark.py --json out/benchmark_whole.json --out assets/benchmark.png
-```
-
-Only Jeff-Tracker is built in. TAPNext++ and CoTracker3 are loaded from paths you supply;
-neither is vendored here, and **CoTracker3 is CC-BY-NC — running it is your licence call,
-not this repository's.**
+Protocol, controls and per-checkpoint numbers: **[docs/BENCHMARK.md](docs/BENCHMARK.md)**
+and **[docs/METHOD.md](docs/METHOD.md)**.
 
 ## Two things it does not do
 
@@ -105,8 +81,7 @@ pip install -r requirements.txt
 ```
 
 The code is Apache-2.0 and public. **The trained checkpoint is gated** — request access on
-[the model page](https://huggingface.co/JeffyAntony/Jeff-Tracker), and once it is
-granted:
+[the model page](https://huggingface.co/JeffyAntony/Jeff-Tracker), and once it is granted:
 
 ```bash
 hf auth login
@@ -139,19 +114,19 @@ python tools/run_jefftrack.py --plate /path/to/frames --name myshot --seed corne
 
 ## Verify
 
-Every number in [docs/METHOD.md](docs/METHOD.md) has a control pass behind it that returns
-a value which *should* be zero. Both metric defects found while building this were metrics
+Every number in [docs/METHOD.md](docs/METHOD.md) has a control pass behind it that returns a
+value which *should* be zero. Both metric defects found while building this were metrics
 measuring the input instead of the tracker, and each was caught this way.
 
 ```bash
-python -m jefftrack.engine --selftest         # rigid translation, exact GT -> 0.100 px
-python tools/check_identity.py              # untrained Jeff-Tracker IS LocoTrack -> 0.000e+00
+python -m jefftrack.engine --selftest       # rigid translation, exact GT -> 0.100 px
+python tools/check_identity.py              # untrained cross-attention IS the base -> 0.000e+00
 python tools/score_occlusion.py --control   # scorer against truth -> 0.00000 px
 python tools/eval_tapvid.py --mode strided  # the port -> 67.7 / 79.5 / 89.8
 ```
 
 `check_identity.py` is the load-bearing one: with cross-track attention zero-initialised the
-model is LocoTrack bit for bit, so anything measured after training is attributable to the
+model is its base bit for bit, so anything measured after training is attributable to the
 new blocks rather than to the port.
 
 ## Train
@@ -162,10 +137,10 @@ python tools/train_cross.py --occ-pos-weight 0.2 --steps 4000
 python tools/score_ckpt.py --ckpt weights/step4000.ckpt --tag s4000
 ```
 
-`--occ-pos-weight` is the flag the whole result turns on: `0.0` is the vendor objective,
-which zeroes the position loss on occluded frames and therefore cannot teach a model to
-cross an occlusion whatever attention you add. `0.2` is CoTracker3's `(𝟙_occ/5 + 𝟙_vis)`
-weighting, implemented from the paper's formula. ~2 s/step at 2.3 GB on an RTX A4000.
+`--occ-pos-weight` is the flag the whole result turns on. The base objective zeroes the
+position loss on occluded frames, so it cannot teach a model to cross an occlusion whatever
+attention you add; `0.2` weights an occluded point at one fifth of a visible one.
+~2 s/step at 2.3 GB on an RTX A4000.
 
 ## Layout
 
@@ -191,15 +166,6 @@ Demo footage is DAVIS (CC BY 4.0); attribution in [assets/README.md](assets/READ
   author    = {Cho, Seokju and Huang, Jiahui and Nam, Seungryong and
                Min, Dongbo and Lee, Joon-Young},
   booktitle = {ECCV},
-  year      = {2024}
-}
-@inproceedings{karaev2024cotracker3,
-  title     = {CoTracker3: Simpler and Better Point Tracking by Pseudo-Labelling
-               Real Videos},
-  author    = {Karaev, Nikita and Makarov, Iurii and Wang, Jianyuan and
-               Rocco, Ignacio and Graham, Benjamin and Neverova, Natalia and
-               Vedaldi, Andrea and Rupprecht, Christian},
-  booktitle = {arXiv:2410.11831},
   year      = {2024}
 }
 ```

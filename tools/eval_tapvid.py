@@ -1,7 +1,7 @@
 """TAP-Vid DAVIS: AJ / delta_avg / OA, so Jeff-Tracker can be put next to published numbers.
 
-This is how the CoTracker comparison gets made without CoTracker ever being run here.
-CoTracker3's DAVIS figures are published in its paper; TAP-Vid is the standard protocol
+TAP-Vid DAVIS is the standard protocol every point tracker publishes against, so running
+it here is what makes this model's numbers readable next to any published table
 that produced them; so evaluating Jeff-Tracker under the same protocol puts the two on one
 axis using nothing but a public fact. See LICENSES.md for why that matters.
 

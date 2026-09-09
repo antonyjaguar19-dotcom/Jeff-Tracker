@@ -23,7 +23,7 @@ ROOT = os.path.dirname(HERE)          # the repo root, one level up
 WEIGHTS = os.path.join(ROOT, "weights")
 
 # The Jeff-Tracker checkpoints. Set JEFFTRACK_HF_REPO to use a fork or a private mirror.
-HF_REPO = os.environ.get("JEFFTRACK_HF_REPO", "antonyjaguar19-dotcom/Jeff-Tracker")
+HF_REPO = os.environ.get("JEFFTRACK_HF_REPO", "JeffyAntony/Jeff-Tracker")
 
 # LocoTrack's own release, Apache-2.0, published by the LocoTrack authors as a dataset repo
 # rather than a model repo.

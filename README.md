@@ -5,7 +5,7 @@
 **An Apache-2.0 point tracker in the CoTracker class.**
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Weights](https://img.shields.io/badge/%F0%9F%A4%97%20weights-Hugging%20Face-yellow)](https://huggingface.co/antonyjaguar19-dotcom/Jeff-Tracker)
+[![Weights](https://img.shields.io/badge/%F0%9F%A4%97%20weights-Hugging%20Face-yellow)](https://huggingface.co/JeffyAntony/Jeff-Tracker)
 [![Base](https://img.shields.io/badge/base-LocoTrack--B-green.svg)](https://github.com/cvlab-kaist/locotrack)
 [![DAVIS](https://img.shields.io/badge/TAP--Vid%20DAVIS-67.7%20AJ-orange.svg)](docs/METHOD.md)
 
@@ -103,7 +103,7 @@ pip install -r requirements.txt
 ```
 
 The code is Apache-2.0 and public. **The trained checkpoint is gated** — request access on
-[the model page](https://huggingface.co/antonyjaguar19-dotcom/Jeff-Tracker), and once it is
+[the model page](https://huggingface.co/JeffyAntony/Jeff-Tracker), and once it is
 granted:
 
 ```bash

@@ -41,6 +41,11 @@ def grab(repo_id: str, filename: str, repo_type: str = "model") -> str:
     something that does not exist. A bare 404 would send people hunting for a typo when the
     actual answer is "ask for access", so the cases are separated and each is told what to
     do next.
+
+    ORDER MATTERS BELOW. `GatedRepoError` is a *subclass* of `RepositoryNotFoundError`
+    (verified against the live gated repo), so it has to be caught first. Swap the two
+    `except` blocks and every gated user is told the repo does not exist, which is both
+    wrong and unactionable.
     """
     from huggingface_hub import hf_hub_download                # noqa: PLC0415
     from huggingface_hub.utils import (                        # noqa: PLC0415

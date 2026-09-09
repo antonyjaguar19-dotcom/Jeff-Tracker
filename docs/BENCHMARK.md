@@ -1,12 +1,12 @@
-# Three-way benchmark: DBtracker, TAPNext++, CoTracker3
+# Three-way benchmark: Jeff-Tracker, TAPNext++, CoTracker3
 
 TAP-Vid DAVIS, 30 clips, 256×256, query-first. The metric is `compute_tapvid_metrics` from
 the official TAP-Vid code, called unmodified — reimplementing it would make the numbers
 incomparable to every published table, which is the only reason to compute them.
 
-Reproduce with `tools/benchmark.py`. Only DBtracker is built in; the other two are loaded
+Reproduce with `tools/benchmark.py`. Only Jeff-Tracker is built in; the other two are loaded
 from paths you supply. **CoTracker3 is CC-BY-NC-4.0** and is not vendored, mirrored or
-redistributed here. TAPNext++ is Apache-2.0, like DBtracker.
+redistributed here. TAPNext++ is Apache-2.0, like Jeff-Tracker.
 
 ## Result
 
@@ -16,7 +16,7 @@ TAPNext is causal and has no such mode.
 | model | licence | AJ | δ_avg | OA | s/frame |
 |---|---|---|---|---|---|
 | **TAPNext++** | Apache-2.0 | **66.2** | **79.4** | **92.1** | 0.2440 |
-| DBtracker | Apache-2.0 | 62.6 | 74.9 | 86.7 | **0.0065** |
+| Jeff-Tracker | Apache-2.0 | 62.6 | 74.9 | 86.7 | **0.0065** |
 | CoTracker3 | CC-BY-NC | 61.9 | 76.8 | 87.5 | 0.0264 |
 
 **TAPNext++ is the most accurate model here, and it is also Apache-2.0.** That is not the
@@ -24,21 +24,21 @@ result this project set out to find, and it is stated first because burying it w
 everything else in this repository less trustworthy. If accuracy is all that matters and
 the licence must be clean, TAPNext++ is the better choice today.
 
-DBtracker's case is cost. It is **37× faster** than TAPNext++ here at 3.6 AJ behind, and
+Jeff-Tracker's case is cost. It is **37× faster** than TAPNext++ here at 3.6 AJ behind, and
 it returns a calibrated per-frame confidence that neither of the others provides
 (AUC 0.955 at detecting its own >5 px frames — see [METHOD.md](METHOD.md)). Against
-CoTracker3 — the model whose licence motivated this whole project — DBtracker is +0.7 AJ,
+CoTracker3 — the model whose licence motivated this whole project — Jeff-Tracker is +0.7 AJ,
 −1.9 δ_avg, −0.8 OA, at a quarter of the cost.
 
 The speed gap is workload-dependent and both figures are honest:
 
-| | DBtracker | TAPNext++ | ratio |
+| | Jeff-Tracker | TAPNext++ | ratio |
 |---|---|---|---|
 | each in its natural mode | 0.0065 | 0.2440 | **37×** |
 | both forced to forward-only grouping | 0.0186 | 0.2458 | **13×** |
 
 TAPNext is causal, so a clip whose queries start on many different frames costs it one
-streamed pass per distinct query frame. DBtracker answers all of them in a single pass.
+streamed pass per distinct query frame. Jeff-Tracker answers all of them in a single pass.
 That is a genuine property of the two designs, not a measurement artifact — but it is a
 property of *this* workload, and a single-query-frame workload would narrow it.
 
@@ -57,7 +57,7 @@ other would leave the result resting on a choice nobody could audit:
 
 | model | forward-only AJ | whole-clip AJ | Δ |
 |---|---|---|---|
-| DBtracker | 62.8 | 62.6 | −0.2 |
+| Jeff-Tracker | 62.8 | 62.6 | −0.2 |
 | TAPNext++ | 66.2 | 66.2 | 0.0 |
 | CoTracker3 | 61.4 | 61.9 | +0.5 |
 
@@ -112,13 +112,13 @@ numbers.
 
 ```bash
 # whole-clip (the headline table)
-python tools/benchmark.py --models dbtracker,tapnext,cotracker3 --whole-clip \
+python tools/benchmark.py --models jefftracker,tapnext,cotracker3 --whole-clip \
     --tapnext-root /path/to/tapnet-tree --tapnext-engine /path/to/tapnext_engine \
     --cotracker /path/to/co-tracker --cotracker-ckpt /path/to/scaled_offline.pth \
     --out out/benchmark_whole.json
 
 # forward-only (the robustness check)
-python tools/benchmark.py --models dbtracker,tapnext,cotracker3 ... --out out/benchmark.json
+python tools/benchmark.py --models jefftracker,tapnext,cotracker3 ... --out out/benchmark.json
 
 python tools/plot_benchmark.py --json out/benchmark_whole.json --out assets/benchmark.png
 python tools/make_compare.py --clip breakdance --out assets/compare_three.gif ...

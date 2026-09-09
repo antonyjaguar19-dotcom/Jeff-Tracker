@@ -1,8 +1,8 @@
-"""TAP-Vid DAVIS: AJ / delta_avg / OA, so DBtracker can be put next to published numbers.
+"""TAP-Vid DAVIS: AJ / delta_avg / OA, so Jeff-Tracker can be put next to published numbers.
 
 This is how the CoTracker comparison gets made without CoTracker ever being run here.
 CoTracker3's DAVIS figures are published in its paper; TAP-Vid is the standard protocol
-that produced them; so evaluating DBtracker under the same protocol puts the two on one
+that produced them; so evaluating Jeff-Tracker under the same protocol puts the two on one
 axis using nothing but a public fact. See LICENSES.md for why that matters.
 
 The metric is the vendor's own `compute_tapvid_metrics` and the query sampling is the
@@ -13,7 +13,7 @@ point of computing it.
 
     python eval_tapvid.py --mode first
     python eval_tapvid.py --mode strided ^
-        --arch dbtrack --ckpt weights\\dbtrack_cross.ckpt
+        --arch jefftrack --ckpt weights\\jefftrack_cross.ckpt
 
 Data: tapvid_davis.pkl from https://storage.googleapis.com/dm-tapnet/tapvid_davis.zip,
 kept in the gitignored data/. Evaluation only -- never trained on, never shipped.
@@ -35,7 +35,7 @@ ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from dbtrack.paths import add_vendor_to_path  # noqa: E402
+from jefftrack.paths import add_vendor_to_path  # noqa: E402
 
 add_vendor_to_path()
 
@@ -47,7 +47,7 @@ import numpy as np  # noqa: E402
 from data.evaluation_datasets import (  # noqa: E402  (vendor, official TAP-Vid code)
     compute_tapvid_metrics, sample_queries_first, sample_queries_strided)
 
-from dbtrack.engine import DBTrackEngine, DEFAULT_CKPT  # noqa: E402
+from jefftrack.engine import JeffTrackEngine, DEFAULT_CKPT  # noqa: E402
 
 DEFAULT_PKL = os.path.join(ROOT, "data", "tapvid_davis", "tapvid_davis.pkl")
 
@@ -62,7 +62,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="TAP-Vid DAVIS evaluation")
     ap.add_argument("--pkl", default=DEFAULT_PKL)
     ap.add_argument("--mode", default="first", choices=["first", "strided"])
-    ap.add_argument("--arch", default="locotrack", choices=["locotrack", "dbtrack"])
+    ap.add_argument("--arch", default="locotrack", choices=["locotrack", "jefftrack"])
     ap.add_argument("--ckpt", default=DEFAULT_CKPT)
     ap.add_argument("--model-size", default="base", choices=["small", "base"])
     ap.add_argument("--model-res", default="256x256")
@@ -79,7 +79,7 @@ def main() -> int:
         davis = pickle.load(fh)
 
     model_res = tuple(int(v) for v in a.model_res.lower().split("x"))
-    eng = DBTrackEngine(device="cuda", model_size=a.model_size, ckpt=a.ckpt,
+    eng = JeffTrackEngine(device="cuda", model_size=a.model_size, ckpt=a.ckpt,
                         model_res=model_res, arch=a.arch)
 
     names = sorted(davis.keys())

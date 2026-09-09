@@ -1,6 +1,6 @@
-"""Prove an untrained DBTrack is LocoTrack -- bit for bit, not approximately.
+"""Prove an untrained Jeff-Tracker is LocoTrack -- bit for bit, not approximately.
 
-This is the gate that makes every Stage-3 number meaningful. If DBTrack at
+This is the gate that makes every Stage-3 number meaningful. If Jeff-Tracker at
 zero-initialisation differs from LocoTrack at all, then a measured change after training
 is a mixture of "cross-track attention helped" and "the port moved something", and there
 is no way to tell the two apart afterwards. Held exactly, one binary produces both the
@@ -34,19 +34,19 @@ ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from dbtrack.paths import add_vendor_to_path  # noqa: E402
+from jefftrack.paths import add_vendor_to_path  # noqa: E402
 
 add_vendor_to_path()
 
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
-from dbtrack.model.dbtrack_model import load_dbtrack  # noqa: E402
-from dbtrack.engine import DEFAULT_CKPT, _load_locotrack  # noqa: E402
+from jefftrack.model.jefftrack_model import load_jefftrack  # noqa: E402
+from jefftrack.engine import DEFAULT_CKPT, _load_locotrack  # noqa: E402
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="untrained DBTrack must equal LocoTrack")
+    ap = argparse.ArgumentParser(description="untrained Jeff-Tracker must equal LocoTrack")
     ap.add_argument("--ckpt", default=DEFAULT_CKPT)
     ap.add_argument("--model-size", default="base", choices=["small", "base"])
     ap.add_argument("--frames", type=int, default=12)
@@ -56,7 +56,7 @@ def main() -> int:
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     base = _load_locotrack(a.ckpt, a.model_size, device)
-    db = load_dbtrack(a.ckpt, a.model_size, device=device)
+    db = load_jefftrack(a.ckpt, a.model_size, device=device)
 
     # ---------------------------------------------------------------- 1. parameters
     bsd, dsd = base.state_dict(), db.state_dict()
@@ -66,7 +66,7 @@ def main() -> int:
     for k in bsd:
         if k in dsd and not torch.equal(bsd[k].cpu(), dsd[k].cpu()):
             bad.append(k)
-    print("vendor parameters : {} shared, {} differ, {} lost, {} added by DBTrack"
+    print("vendor parameters : {} shared, {} differ, {} lost, {} added by Jeff-Tracker"
           .format(len(bsd), len(bad), len(lost), len(extra)))
     if bad[:3]:
         print("  differing: {}".format(bad[:3]))
@@ -109,7 +109,7 @@ def main() -> int:
 
     ok = (not bad) and (not lost) and zero_ok and exact
     print()
-    print("{}  untrained DBTrack {} LocoTrack".format(
+    print("{}  untrained Jeff-Tracker {} LocoTrack".format(
         "PASS" if ok else "FAIL", "is" if ok else "is NOT"))
     if ok:
         n_new = sum(p.numel() for p in db.cross_parameters())

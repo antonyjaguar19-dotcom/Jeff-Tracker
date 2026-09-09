@@ -37,8 +37,8 @@ os.environ.setdefault("OPENCV_IO_ENABLE_OPENEXR", "1")
 import cv2  # noqa: E402
 import numpy as np  # noqa: E402
 
-from dbtrack.engine import DBTrackEngine, DEFAULT_CKPT  # noqa: E402
-from dbtrack.io import seed_grid, track_colors  # noqa: E402
+from jefftrack.engine import JeffTrackEngine, DEFAULT_CKPT  # noqa: E402
+from jefftrack.io import seed_grid, track_colors  # noqa: E402
 
 DEFAULT_PKL = os.path.join(ROOT, "data", "tapvid_davis", "tapvid_davis.pkl")
 
@@ -145,7 +145,7 @@ def main() -> int:
     ap.add_argument("--mode", default="grid", choices=["grid", "conf", "occl"])
     ap.add_argument("--out", required=True)
     ap.add_argument("--ckpt", default=DEFAULT_CKPT)
-    ap.add_argument("--arch", default="dbtrack", choices=["locotrack", "dbtrack"])
+    ap.add_argument("--arch", default="jefftrack", choices=["locotrack", "jefftrack"])
     ap.add_argument("--model-res", default="256x256")
     ap.add_argument("--grid", type=int, default=18)
     ap.add_argument("--frames", type=int, default=0, help="0 = the whole clip")
@@ -171,7 +171,7 @@ def main() -> int:
     pts = seed_grid(a.grid, W, H)
     q = np.concatenate([np.zeros((len(pts), 1), np.float32), pts], 1)
 
-    eng = DBTrackEngine(device="cuda", model_size="base", ckpt=a.ckpt,
+    eng = JeffTrackEngine(device="cuda", model_size="base", ckpt=a.ckpt,
                         model_res=model_res, arch=a.arch)
     tracks, vis, conf = eng.track_queries_conf(frames, q)
     print("[demo] {} points, {:.1f}% visible, mean conf {:.3f}".format(

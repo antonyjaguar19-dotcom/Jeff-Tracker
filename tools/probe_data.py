@@ -7,7 +7,7 @@ model's forward pass actually expects:
 
   * shapes and dtypes match LocoTrack's signature (video [B,T,H,W,3], query 'tyx',
     targets 'xy');
-  * the video is really in [-1, 1], because dbtrack.engine feeds inference in that range
+  * the video is really in [-1, 1], because jefftrack.engine feeds inference in that range
     and a training set in [0, 255] would teach the model a different input distribution
     than it is ever shown afterwards;
   * query points land ON their own track: target_points at the query frame must equal the
@@ -47,7 +47,7 @@ def main() -> int:
     ap.add_argument("--res", type=int, default=256)
     a = ap.parse_args()
 
-    from dbtrack.data.movi import batches  # noqa: E402
+    from jefftrack.data.movi import batches  # noqa: E402
 
     stream = batches(device="cpu", data_dir=a.data_dir, name=a.dataset, split=a.split,
                      train_size=(a.res, a.res), batch_size=1, tracks_to_sample=a.tracks,

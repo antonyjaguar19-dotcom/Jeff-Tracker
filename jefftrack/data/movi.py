@@ -30,7 +30,7 @@ from typing import Iterator, Mapping, Optional, Tuple
 import numpy as np
 import torch
 
-from dbtrack.paths import add_vendor_to_path
+from jefftrack.paths import add_vendor_to_path
 
 add_vendor_to_path()
 

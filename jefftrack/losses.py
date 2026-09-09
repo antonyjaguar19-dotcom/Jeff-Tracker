@@ -33,7 +33,7 @@ from __future__ import annotations
 import torch
 import torch.nn.functional as F
 
-from dbtrack.paths import add_vendor_to_path
+from jefftrack.paths import add_vendor_to_path
 
 add_vendor_to_path()
 

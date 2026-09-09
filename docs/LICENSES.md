@@ -42,7 +42,7 @@ this project starts from were produced with it, and the Apache-2.0 status of tho
 rests on the LocoTrack authors' own declaration over their release — which is theirs to
 make, not ours to verify.
 
-DBtracker's own training uses `movi_e/256x256` from `gs://kubric-public/tfds`, which is
+Jeff-Tracker's own training uses `movi_e/256x256` from `gs://kubric-public/tfds`, which is
 Apache-2.0 and published by Google directly, so the chain from that point forward holds end
 to end: Apache code, Apache base weights, Apache training data. The cost is a distribution
 shift — LocoTrack-B was fine-tuned on *panning* MOVi-E and this is plain MOVi-E — which is
@@ -64,7 +64,7 @@ and does not put into this repository.
 CC BY 4.0 DAVIS footage.
 
 **Absent:** its code, its weights, any derived weights, and any dependency on it. Nothing in
-`dbtrack/` imports it. No DBtracker checkpoint was trained, distilled, tuned or selected
+`jefftrack/` imports it. No Jeff-Tracker checkpoint was trained, distilled, tuned or selected
 using it — `inf_s4000.ckpt` was chosen on a synthetic occlusion bench and validated on three
 more built afterwards, all of which predate any comparison. Removing every CoTracker
 reference would cost this project the comparison and nothing else.

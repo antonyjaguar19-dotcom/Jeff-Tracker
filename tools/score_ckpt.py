@@ -74,14 +74,14 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="score a checkpoint on both benches")
     ap.add_argument("--ckpt", default=None, help="omit with --arch locotrack for baseline")
     ap.add_argument("--tag", required=True)
-    ap.add_argument("--arch", default="dbtrack", choices=["locotrack", "dbtrack"])
+    ap.add_argument("--arch", default="jefftrack", choices=["locotrack", "jefftrack"])
     ap.add_argument("--shot", default=os.path.join(REPO, "bench", "synth", "lab02_occ"))
     ap.add_argument("--model-res", default="256x256")
     ap.add_argument("--skip-tapvid", action="store_true")
     a = ap.parse_args()
 
     name = "lab02_occ_" + a.tag
-    track = [PY, os.path.join(HERE, "run_dbtrack.py"),
+    track = [PY, os.path.join(HERE, "run_jefftrack.py"),
              "--plate", os.path.join(a.shot, "plate"), "--name", name,
              "--arch", a.arch, "--seed", "corners", "--points", "600",
              "--model-res", a.model_res, "--work-width", "1280", "--no-render"]
@@ -90,14 +90,14 @@ def main() -> int:
     run(track)
 
     occ = run([PY, os.path.join(HERE, "score_occlusion.py"), "--shot", a.shot,
-               "--bot", os.path.join(HERE, "out", name + "__dbtrack.txt")])
+               "--bot", os.path.join(HERE, "out", name + "__jefftrack.txt")])
     vis_m, vis_md = grab(occ, "VISIBLE")
     occ_m, _ = grab(occ, "OCCLUDED")
     rea_m, _ = grab(occ, "RE-ACQUIRE")
     cov = re.search(r"coverage ([\d.]+)% of occluded", occ)
     cov = float(cov.group(1)) if cov else float("nan")
     ung_med, ung_pct = ungated_occluded(
-        a.shot, os.path.join(HERE, "out", name + "__dbtrack.npz"))
+        a.shot, os.path.join(HERE, "out", name + "__jefftrack.npz"))
 
     aj = da = oa = float("nan")
     if not a.skip_tapvid:

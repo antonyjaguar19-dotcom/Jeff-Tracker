@@ -1,4 +1,4 @@
-"""DBTrack = LocoTrack + cross-track attention, initialised to be LocoTrack exactly.
+"""Jeff-Tracker = LocoTrack + cross-track attention, initialised to be LocoTrack exactly.
 
 LocoTrack's refinement transformer is per-track by construction: locotrack_model.py:891
 folds the track axis into the batch before calling the mixer. This module rebuilds that
@@ -9,7 +9,7 @@ Two properties are load-bearing and both are checked by ../../check_identity.py:
 
   1. The vendor's parameters keep their names. `input_proj`, `transformer.*` and
      `output_proj` are the SAME module objects, re-parented, so a LocoTrack checkpoint
-     loads into DBTrack with the new `cross.*` keys as the only additions -- not a rename
+     loads into Jeff-Tracker with the new `cross.*` keys as the only additions -- not a rename
      in sight, and no weight is transformed on the way in.
   2. With the cross blocks zero-initialised the model's output is bit-for-bit identical to
      LocoTrack's. Not close: identical. That is what makes a baseline-vs-treatment
@@ -28,20 +28,20 @@ from typing import Optional, Sequence
 import torch
 import torch.nn as nn
 
-from dbtrack.paths import add_vendor_to_path
+from jefftrack.paths import add_vendor_to_path
 
 add_vendor_to_path()
 
 from models.locotrack_model import LocoTrack, PIPSTransformer  # noqa: E402
 
-from dbtrack.model.cross_track import CrossTrackAttention  # noqa: E402
+from jefftrack.model.cross_track import CrossTrackAttention  # noqa: E402
 
 
 class CrossTrackPIPSTransformer(nn.Module):
     """The vendor's PIPSTransformer with cross-track blocks interleaved.
 
     Input is (B*N, F, C) -- the shape refine_pips hands over -- so the module has to be
-    told the batch size to recover N. It defaults to 1 and DBTrack.forward sets it.
+    told the batch size to recover N. It defaults to 1 and JeffTracker.forward sets it.
     """
 
     def __init__(self, base: PIPSTransformer, batch_size: int = 1,
@@ -95,7 +95,7 @@ class CrossTrackPIPSTransformer(nn.Module):
         return self.output_proj(h)
 
 
-class DBTrack(LocoTrack):
+class JeffTracker(LocoTrack):
     """LocoTrack whose refinement mixer can see across tracks."""
 
     def __init__(self, *args, cross_layers: Optional[Sequence[int]] = None,
@@ -128,31 +128,39 @@ class DBTrack(LocoTrack):
             p.requires_grad_(True)
 
 
-def load_dbtrack(ckpt_path: str, model_size: str = "base",
+def load_jefftrack(ckpt_path: str, model_size: str = "base",
                  cross_layers: Optional[Sequence[int]] = None, num_proxies: int = 16,
                  cross_heads: int = 4, zero_init: bool = True,
-                 device: str = "cpu") -> DBTrack:
-    """Build DBTrack and load LocoTrack weights into it.
+                 device: str = "cpu") -> JeffTracker:
+    """Build Jeff-Tracker and load LocoTrack weights into it.
 
     The published checkpoints are Lightning checkpoints: weights live under 'state_dict'
     with every key prefixed 'model.'. Anything missing must be a cross-track parameter and
     nothing may be unexpected -- if a vendor key fails to land, the model is silently part
     random and every number measured from it is fiction.
 
-    A checkpoint written by train_cross.py carries its own architecture under 'dbtrack',
+    A checkpoint written by train_cross.py carries its own architecture under 'jefftrack',
     and that wins over the arguments here. A trained checkpoint loaded into a
     differently-shaped model would either throw a shape error or, worse, land its proxies
     in a block of the wrong width, so the shape travels with the weights rather than
     depending on the caller passing the same flags months later.
     """
     blob = torch.load(ckpt_path, map_location="cpu", weights_only=False)
-    saved = blob.get("dbtrack") if isinstance(blob, dict) else None
+    # Checkpoints written before the rename carry their architecture under "dbtrack".
+    # Reading only the new key would make every already-published weight file
+    # unloadable by its own repository, so both are accepted and the old one is
+    # never written again.
+    saved = None
+    if isinstance(blob, dict):
+        saved = blob.get("jefftrack")
+        if saved is None:
+            saved = blob.get("dbtrack")
     if saved:
         model_size = saved.get("model_size", model_size)
         cross_layers = saved.get("cross_layers", cross_layers)
         num_proxies = int(saved.get("num_proxies", num_proxies))
         cross_heads = int(saved.get("cross_heads", cross_heads))
-    model = DBTrack(model_size=model_size, cross_layers=cross_layers,
+    model = JeffTracker(model_size=model_size, cross_layers=cross_layers,
                     num_proxies=num_proxies, cross_heads=cross_heads, zero_init=zero_init)
     state = blob["state_dict"] if "state_dict" in blob else blob
     state = {k.replace("model.", "", 1): v for k, v in state.items()}
@@ -160,7 +168,7 @@ def load_dbtrack(ckpt_path: str, model_size: str = "base",
     stray = [k for k in missing if ".cross." not in k]
     if stray or unexpected:
         raise SystemExit(
-            "[ERROR] LocoTrack weights do not fit DBTrack: {} non-cross keys missing, "
+            "[ERROR] LocoTrack weights do not fit Jeff-Tracker: {} non-cross keys missing, "
             "{} unexpected. missing={} unexpected={}".format(
                 len(stray), len(unexpected), stray[:5], list(unexpected)[:5]))
     return model.to(device).eval()

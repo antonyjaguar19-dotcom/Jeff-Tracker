@@ -35,13 +35,13 @@ os.environ.setdefault("OPENCV_IO_ENABLE_OPENEXR", "1")
 import cv2  # noqa: E402
 import numpy as np  # noqa: E402
 
-from dbtrack.io import seed_grid, track_colors  # noqa: E402
+from jefftrack.io import seed_grid, track_colors  # noqa: E402
 from make_demo import load_clip, save_gif  # noqa: E402
 from benchmark import (  # noqa: E402
-    CoTracker3Adapter, DBtrackerAdapter, TapNextAdapter)
+    CoTracker3Adapter, JeffTrackerAdapter, TapNextAdapter)
 
 TITLES = {
-    "dbtracker": "DBtracker  (Apache-2.0)",
+    "jefftracker": "Jeff-Tracker  (Apache-2.0)",
     "tapnext": "TAPNext++  (Apache-2.0)",
     "cotracker3": "CoTracker3  (CC-BY-NC)",
 }
@@ -84,7 +84,7 @@ def main() -> int:
     ap.add_argument("--clip", default="dance-twirl")
     ap.add_argument("--pkl", default=os.path.join(ROOT, "data", "tapvid_davis",
                                                   "tapvid_davis.pkl"))
-    ap.add_argument("--models", default="dbtracker,tapnext,cotracker3")
+    ap.add_argument("--models", default="jefftracker,tapnext,cotracker3")
     ap.add_argument("--out", required=True)
     ap.add_argument("--ckpt", default=os.path.join(ROOT, "weights", "inf_s4000.ckpt"))
     ap.add_argument("--tapnext-root", default="")
@@ -114,8 +114,8 @@ def main() -> int:
 
     results = []
     for m in [x.strip() for x in a.models.split(",") if x.strip()]:
-        if m == "dbtracker":
-            ad = DBtrackerAdapter(a.ckpt)
+        if m == "jefftracker":
+            ad = JeffTrackerAdapter(a.ckpt)
         elif m == "tapnext":
             ad = TapNextAdapter(a.tapnext_root, a.tapnext_engine or None)
         elif m == "cotracker3":

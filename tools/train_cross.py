@@ -7,7 +7,7 @@ the comparison clean. The baseline and the treatment share every vendor weight b
 bit, so a change in the numbers is attributable to the new blocks and to nothing else.
 check_identity.py proves the starting point; this script is the only thing that moves it.
 
-Loss is the vendor's arithmetic with exactly one thing changed, in dbtrack/losses.py: the
+Loss is the vendor's arithmetic with exactly one thing changed, in jefftrack/losses.py: the
 position term is weighted on occluded frames rather than zeroed. The vendor multiplies it
 by `(1.0 - occluded)` (model_utils.py:15), so LocoTrack is never trained to place a point
 it cannot see -- measured consequence, fine-tuning under that objective improved visible
@@ -16,9 +16,9 @@ optimises it can learn to cross an occlusion. `--occ-pos-weight 0.0` reproduces 
 objective exactly, so the two are one flag apart.
 
     python train_cross.py ^
-        --steps 20000 --save-every 1000 --out weights\\dbtrack_cross.ckpt
+        --steps 20000 --save-every 1000 --out weights\\jefftrack_cross.ckpt
 
-Checkpoints are written in the same shape load_dbtrack() reads, and carry the architecture
+Checkpoints are written in the same shape load_jefftrack() reads, and carry the architecture
 config with them, so a checkpoint can never be loaded into a differently-shaped model
 without the loader noticing.
 """
@@ -35,24 +35,24 @@ ROOT = os.path.dirname(HERE)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from dbtrack.paths import add_vendor_to_path  # noqa: E402
+from jefftrack.paths import add_vendor_to_path  # noqa: E402
 
 add_vendor_to_path()
 
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
-from dbtrack.losses import tapir_loss_weighted  # noqa: E402
-from dbtrack.model.dbtrack_model import load_dbtrack  # noqa: E402
-from dbtrack.engine import DEFAULT_CKPT  # noqa: E402
+from jefftrack.losses import tapir_loss_weighted  # noqa: E402
+from jefftrack.model.jefftrack_model import load_jefftrack  # noqa: E402
+from jefftrack.engine import DEFAULT_CKPT  # noqa: E402
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="fine-tune DBtracker's cross-track blocks")
+    ap = argparse.ArgumentParser(description="fine-tune Jeff-Tracker's cross-track blocks")
     ap.add_argument("--base-ckpt", default=DEFAULT_CKPT,
                     help="LocoTrack weights to start from (stays frozen)")
-    ap.add_argument("--resume", default=None, help="a previous dbtrack checkpoint")
-    ap.add_argument("--out", default=os.path.join(HERE, "weights", "dbtrack_cross.ckpt"))
+    ap.add_argument("--resume", default=None, help="a previous jefftrack checkpoint")
+    ap.add_argument("--out", default=os.path.join(HERE, "weights", "jefftrack_cross.ckpt"))
     ap.add_argument("--model-size", default="base", choices=["small", "base"])
     ap.add_argument("--data-dir", default="gs://kubric-public/tfds")
     ap.add_argument("--dataset", default="movi_e/256x256")
@@ -81,7 +81,7 @@ def main() -> int:
     if device == "cpu":
         raise SystemExit("[ERROR] training needs a GPU")
 
-    model = load_dbtrack(a.resume or a.base_ckpt, model_size=a.model_size,
+    model = load_jefftrack(a.resume or a.base_ckpt, model_size=a.model_size,
                          num_proxies=a.num_proxies, cross_heads=a.cross_heads,
                          zero_init=a.resume is None, device=device)
     model.freeze_base()
@@ -103,7 +103,7 @@ def main() -> int:
     # Imported here, not at module scope: tensorflow is a heavy import that only the
     # training path needs, and a missing pydeps install should fail with the message in
     # movi._import_tf rather than at the top of this file.
-    from dbtrack.data.movi import batches  # noqa: E402
+    from jefftrack.data.movi import batches  # noqa: E402
 
     print("[data] {} {} from {}".format(a.dataset, a.split, a.data_dir))
     stream = batches(device=device, data_dir=a.data_dir, name=a.dataset, split=a.split,
@@ -117,7 +117,7 @@ def main() -> int:
            "occ_pos_weight": a.occ_pos_weight}
 
     def save(step: int, running: float):
-        blob = {"state_dict": model.state_dict(), "dbtrack": cfg,
+        blob = {"state_dict": model.state_dict(), "jefftrack": cfg,
                 "step": step, "loss": running}
         torch.save(blob, a.out)
         with open(os.path.splitext(a.out)[0] + ".json", "w") as fh:

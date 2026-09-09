@@ -1,4 +1,4 @@
-"""Score DBtracker against a reference by seeding it ON the reference points.
+"""Score Jeff-Tracker against a reference by seeding it ON the reference points.
 
 proximity-paired scorers pair tracker output to reference tracks by proximity, which is the right
 thing when scoring a real tracker export -- the tracker picked its own features and nobody told it
@@ -41,12 +41,12 @@ import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
 from app.compare_tracks import load_tracks  # noqa: E402
-from dbtrack.engine import DBTrackEngine, DEFAULT_CKPT  # noqa: E402
-from dbtrack.io import list_frames, read_frame  # noqa: E402
+from jefftrack.engine import JeffTrackEngine, DEFAULT_CKPT  # noqa: E402
+from jefftrack.io import list_frames, read_frame  # noqa: E402
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="DBtracker vs a reference, seeded on it")
+    ap = argparse.ArgumentParser(description="Jeff-Tracker vs a reference, seeded on it")
     ap.add_argument("--ref", required=True, help="reference folder (manual.txt, refs.json)")
     ap.add_argument("--plate", required=True)
     ap.add_argument("--ckpt", default=DEFAULT_CKPT)
@@ -104,7 +104,7 @@ def main() -> int:
         raise SystemExit("[ERROR] no reference track starts inside the frame range")
     q = np.asarray(seeds, np.float32)
 
-    eng = DBTrackEngine(device="cuda", model_size=a.model_size, ckpt=a.ckpt,
+    eng = JeffTrackEngine(device="cuda", model_size=a.model_size, ckpt=a.ckpt,
                         model_res=model_res, window=a.window)
     if eng.device == "cuda":
         torch.cuda.reset_peak_memory_stats()

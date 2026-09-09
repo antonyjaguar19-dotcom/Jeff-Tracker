@@ -2,7 +2,7 @@
 
 bench/README.md is explicit that the synthetic bench does NOT measure occlusion: "one
 plane, nothing moves relative to anything else". That is the one thing this whole
-experiment is about -- cross-track attention is the CoTracker3 component with the
+experiment is about -- cross-track attention is the component with the
 occluded-point number attached to it (paper Table 3: occluded 35.9 -> 41.0, visible only
 71.3 -> 72.9), so a bench that cannot see occlusion cannot decide whether to build it.
 

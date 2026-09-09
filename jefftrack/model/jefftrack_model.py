@@ -18,8 +18,8 @@ Two properties are load-bearing and both are checked by ../../check_identity.py:
 
 Scope limit worth knowing before reading any result: LocoTrack chunks queries
 (`query_chunk_size`, default 64), so cross-track attention sees the tracks within one
-chunk, not every track in the shot. CoTracker attends across all tracks in its window.
-Raise query_chunk_size to widen it, at the usual VRAM cost.
+chunk, not every track in the shot -- narrower than attending across every track in a
+window. Raise query_chunk_size to widen it, at the usual VRAM cost.
 """
 from __future__ import annotations
 

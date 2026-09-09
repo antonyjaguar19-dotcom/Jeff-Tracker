@@ -1,16 +1,13 @@
-"""Three-way TAP-Vid DAVIS benchmark: Jeff-Tracker, TAPNext++, CoTracker3.
+"""Jeff-Tracker on TAP-Vid DAVIS.
 
-    python tools/benchmark.py --models jefftracker,tapnext,cotracker3 --out out/bench.json
+    python tools/benchmark.py --models jefftracker --whole-clip --out out/bench.json
 
-Only Jeff-Tracker is built in. The other two are loaded from paths you supply, because
-neither belongs in this repository:
+Reports AJ / delta_avg / OA and cost, using the official TAP-Vid metric implementation
+unmodified. `--arch locotrack` runs the unmodified base the model is fine-tuned from, which
+is the ablation behind the left panel of assets/results.png.
 
-    --tapnext-root  DIR   a checkout that provides tapnet.tapnext (Apache-2.0)
-    --cotracker DIR --cotracker-ckpt FILE   a co-tracker checkout and its weights
-
-**CoTracker3 is CC-BY-NC-4.0.** Nothing of it is vendored, mirrored or redistributed here;
-this script only calls it if you point it at your own copy, and the licence question of
-running it is yours, not this repository's. TAPNext++ is Apache-2.0, like Jeff-Tracker.
+TAPNext++ (Apache-2.0) is available as an optional second adapter if you point
+`--tapnext-root` at your own checkout; nothing of it is vendored here either.
 
 ## Protocol, and why it is the same for all three
 
@@ -20,7 +17,7 @@ TAP-Vid DAVIS, **query-first**, 256x256 -- the standard published setting. The m
 In `first` mode the metric builds its evaluation mask as `cumsum(eye) - eye`, so only
 frames strictly **after** a point's query frame are scored. That single fact is what makes
 this comparison fair: TAPNext is causal -- it streams forward from a seed and cannot look
-back -- while Jeff-Tracker and CoTracker3 see the whole clip at once. So every model here is
+back -- while Jeff-Tracker sees the whole clip at once. So every model here is
 run the same way: queries are grouped by their query frame `k`, the model is given
 `frames[k:]` with the queries at local frame 0, and its output is scattered back into the
 full timeline. Frames before `k` are left at zero and are never read by the metric.
@@ -105,43 +102,15 @@ class TapNextAdapter(Adapter):
         return self.eng.track_queries(frames_bgr, np.asarray(queries, np.float32))
 
 
-class CoTracker3Adapter(Adapter):
-    name = "cotracker3"
-
-    def __init__(self, code_dir, ckpt):
-        if code_dir not in sys.path:
-            sys.path.insert(0, code_dir)
-        import torch                                                  # noqa: PLC0415
-        from cotracker.predictor import CoTrackerPredictor            # noqa: PLC0415
-        self.torch = torch
-        self.model = CoTrackerPredictor(checkpoint=ckpt, offline=True, v2=False,
-                                        window_len=60).cuda().eval()
-
-    def track(self, frames_bgr, queries, backward=False):
-        torch = self.torch
-        rgb = np.ascontiguousarray(frames_bgr[:, :, :, ::-1])
-        video = torch.from_numpy(rgb).permute(0, 3, 1, 2)[None].float().cuda()
-        q = torch.from_numpy(np.asarray(queries, np.float32))[None].cuda()
-        with torch.no_grad():
-            # backward_tracking stays OFF: in first mode nothing before the query frame is
-            # scored, and letting one model look backwards would not be the same protocol.
-            tr, vs = self.model(video, queries=q, backward_tracking=bool(backward))
-        out = (tr[0].cpu().numpy(), vs[0].cpu().numpy().astype(bool))
-        del video, q, tr, vs
-        torch.cuda.empty_cache()
-        return out
-
-
 # ------------------------------------------------------------------ the run
 def run_clip_whole(adapter, frames_bgr, query_points):
     """Give an OFFLINE model what it is actually built for: the whole clip at once, its
-    queries at their true frame index, and -- for CoTracker3 -- backward tracking on.
+    queries at their true frame index, and backward tracking on where the model has it.
 
     This exists because the forward-only protocol below is not neutral. It is neutral
     between a causal model and an offline one only in the sense that both are handed the
-    same frames; what it actually does is strip the offline models of the thing that makes
-    them offline. Reporting one protocol and calling it 'the' comparison would understate
-    CoTracker3 by a wide margin against its own published figure.
+    same frames; what it actually does is strip an offline model of the thing that makes it
+    offline. Both protocols are therefore reported rather than one being chosen.
     """
     q = np.stack([query_points[:, 0].astype(np.float32),
                   query_points[:, 2].astype(np.float32),
@@ -243,13 +212,11 @@ def main() -> int:
     ap.add_argument("--arch", default="jefftrack", choices=["locotrack", "jefftrack"])
     ap.add_argument("--tapnext-root", default=os.environ.get("BTR_TAPNEXT_ROOT", ""))
     ap.add_argument("--whole-clip", action="store_true",
-                    help="let the OFFLINE models (jefftracker, cotracker3) use the whole "
+                    help="let an OFFLINE model (jefftracker) use the whole "
                          "clip and backward tracking, which is what they are built for. "
                          "TAPNext is causal and is unaffected by this flag.")
     ap.add_argument("--tapnext-engine", default="",
                     help="dir holding tapnext_engine.py, if not tapnext-root")
-    ap.add_argument("--cotracker", default=os.environ.get("BTR_COTRACKER_DIR", ""))
-    ap.add_argument("--cotracker-ckpt", default=os.environ.get("BTR_COTRACKER_CKPT", ""))
     a = ap.parse_args()
 
     if not os.path.isfile(a.pkl):
@@ -270,10 +237,6 @@ def main() -> int:
             if not a.tapnext_root:
                 raise SystemExit("[ERROR] --tapnext-root is required for tapnext")
             ad = TapNextAdapter(a.tapnext_root, a.tapnext_engine or None)
-        elif m == "cotracker3":
-            if not (a.cotracker and a.cotracker_ckpt):
-                raise SystemExit("[ERROR] --cotracker and --cotracker-ckpt are required")
-            ad = CoTracker3Adapter(a.cotracker, a.cotracker_ckpt)
         else:
             raise SystemExit("[ERROR] unknown model {!r}".format(m))
 

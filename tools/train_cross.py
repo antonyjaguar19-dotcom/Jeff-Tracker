@@ -67,7 +67,8 @@ def main() -> int:
     ap.add_argument("--occ-pos-weight", type=float, default=0.2,
                     help="position-loss weight on GT-occluded frames. The vendor uses a "
                          "hard 0, which is why LocoTrack never learns to cross an "
-                         "occlusion; 0.2 is CoTracker3's 1/5. Pass 0.0 to reproduce the "
+                         "occlusion; 0.2 weights an occluded point at one fifth of a "
+                         "visible one. Pass 0.0 to reproduce the "
                          "vendor objective exactly.")
     ap.add_argument("--num-proxies", type=int, default=16)
     ap.add_argument("--cross-heads", type=int, default=4)

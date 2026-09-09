@@ -31,7 +31,12 @@ Training data preparation uses one file from Kubric:
 Training data is MOVi-E (movi_e/256x256) from gs://kubric-public/tfds, published
 by Google under the Apache License, Version 2.0.
 
-Cross-track attention (dbtrack/model/cross_track.py) is an independent
-implementation written from the description in "CoTracker3: Simpler and Better
-Point Tracking by Pseudo-Labelling Real Videos" (arXiv:2410.11831). No code,
-weights, or tensors in this repository derive from the CoTracker repository.
+Cross-track attention (jefftrack/model/cross_track.py) and the occluded-position
+loss weighting (jefftrack/losses.py) are independent implementations written from
+the description in:
+
+  Karaev et al., "CoTracker3: Simpler and Better Point Tracking by
+  Pseudo-Labelling Real Videos", arXiv:2410.11831
+
+The ideas are credited to that work. No code, weights or tensors in this
+repository derive from any implementation of it.

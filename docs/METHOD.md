@@ -57,26 +57,6 @@ occlusion number below is measuring the tracker rather than a broken wrapper. 30
 Query-first mode, for completeness: **AJ 62.6, δ_avg 74.7, OA 86.9** (26 s). The paper
 publishes no first-mode DAVIS row, so there is nothing to check that against.
 
-### On comparing against CoTracker3's published table
-
-CoTracker3 Table 1 reports δ_avg^**vis** — averaged over visible points only — while the
-standard `compute_tapvid_metrics` averages over all evaluation points. Those columns are
-**not** directly comparable and must not be quoted side by side. What is meaningful is the
-gap *within* that table, all Kubric-only, all DAVIS:
-
-| CoTracker3 Table 1 (δ_avg^vis) | AJ | δ_avg^vis | OA |
-|---|---|---|---|
-| CoTracker3 offline | 74.0 | 84.9 | 90.5 |
-| CoTracker3 online | 71.1 | 81.9 | 90.3 |
-| LocoTrack | 69.7 | 83.2 | 89.5 |
-| CoTracker | 67.4 | 78.9 | 85.2 |
-| TAPIR | 55.5 | 69.7 | 88.0 |
-
-**CoTracker3 offline is +4.3 AJ over LocoTrack**, at +1.7 δ and +1.0 OA — a gap
-concentrated somewhere other than plain localisation, which is what the occlusion bench
-below says independently. That is the gap cross-track attention is aimed at, and
-establishing it needs no CoTracker code, weights or outputs at all.
-
 ## Localisation — synthetic bench, exact homography ground truth, 600 tracks
 
 A single textured plane under a known homography, so every seed has exact truth. It
@@ -216,8 +196,8 @@ frame, mediated by 16 learned proxy tokens so cost is O(N·K) rather than O(N²)
 a set, not a sequence, so there is no positional encoding and no causal mask — either would
 assert an order between track 7 and track 8 that does not exist.
 
-Written from the description in the CoTracker3 paper (arXiv 2410.11831). No file, function,
-or weight tensor derives from the CoTracker repository.
+Written from the description in a published paper (arXiv 2410.11831); see NOTICE. No file,
+function or weight tensor is derived from any third-party implementation of it.
 
 `jefftrack/model/jefftrack_model.py` re-parents LocoTrack's own `input_proj`, `transformer` and
 `output_proj` — the same module objects, not rebuilt — and unrolls the vendor's layer loop
@@ -283,9 +263,10 @@ to drift wherever suits the visible frames — which is exactly what it did. **N
 training under that objective can teach a model to cross an occlusion**, regardless of what
 attention is bolted on.
 
-CoTracker3 weights occluded points at one fifth instead of zero — the `(𝟙_occ/5 + 𝟙_vis)`
-term in its loss. `jefftrack/losses.py` implements that weighting from the paper's formula
-and is otherwise the vendor's arithmetic line for line. Verified to reduce to it exactly:
+Weighting occluded points at one fifth instead of zero — the `(𝟙_occ/5 + 𝟙_vis)` term from
+arXiv 2410.11831 — is the fix. `jefftrack/losses.py` implements that weighting from the
+paper's formula and is otherwise the vendor's arithmetic line for line. Verified to reduce
+to the vendor objective exactly:
 
 ```
 vendor tapir_loss      61.05917740

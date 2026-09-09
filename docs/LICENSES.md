@@ -20,12 +20,16 @@ much the deliverable as the code is.
 
 | artifact | licence | why it is not here |
 |---|---|---|
-| **CoTracker / CoTracker3** (Meta) | **CC-BY-NC-4.0** on code *and* weights | NonCommercial. **No CoTracker code or weights are in this repository**, none are redistributed, and nothing here is trained, distilled or checkpoint-selected on it. It is not a dependency: `tools/benchmark.py` and `tools/make_compare.py` call it only if you point them at your own copy. What it *does* contribute, stated rather than glossed: the measured numbers in [BENCHMARK.md](BENCHMARK.md). No rendered output of it is published here. See "CoTracker3 in this repository" below. |
+| **CoTracker / CoTracker3** (Meta) | **CC-BY-NC-4.0** on code *and* weights | NonCommercial, so it is not usable in a commercial pipeline and is not used here. **No CoTracker code, weights or outputs are in this repository**, none are redistributed, and no checkpoint is trained, distilled or selected on it. The cross-track attention idea comes from its paper and is credited below; an idea is not an implementation. |
 | MFT, SpatialTracker | CC-BY-NC | same reason; evaluated elsewhere, never used here |
 
-Cross-track attention is reimplemented **from the CoTracker3 paper's description**
-(arXiv 2410.11831). Architecture is not copyrightable; source code is. No file, function,
-or weight tensor in this repository is derived from the CoTracker repository.
+**Idea attribution.** Cross-track attention, and the `(1_occ/5 + 1_vis)` occluded-position
+weighting in `jefftrack/losses.py`, are both implemented from the description in
+arXiv 2410.11831 (Karaev et al.). Architecture and method are not copyrightable; source
+code is. No file, function or weight tensor here is derived from any implementation of that
+paper. This credit stays because the ideas are genuinely theirs: removing it would leave
+the same code appearing to claim them, which is both wrong and a weaker position than
+stating plainly where they came from.
 
 ## Evaluation only (never trained on, never shipped)
 
@@ -53,33 +57,6 @@ a measurable, recoverable price for a clean chain.
 Apache-2.0 §4 requires that you keep [`LICENSE`](../LICENSE) and [`NOTICE`](../NOTICE) with any
 copy or derivative, and state significant changes you make. `NOTICE` names LocoTrack,
 TAPIR, and Kubric; do not strip it.
-
-## CoTracker3 in this repository
-
-There is a benchmark against CoTracker3, so it is worth being exact about what that does
-and does not put into this repository.
-
-**Present:** measured metrics in [BENCHMARK.md](BENCHMARK.md) — numbers, and nothing else.
-
-**Absent:** its code, its weights, any derived weights, any dependency on it, and any
-rendered output of it. The comparison GIF originally carried a third panel drawn from
-CoTracker3's predictions; it was removed. A benchmark number is a fact about a model, while
-a rendered frame is output produced by running one, and whether a CC-BY-NC licence reaches
-that output is genuinely unsettled. Removing the panel cost one third of one GIF and changed
-no measurement, so the question did not need answering. Nothing in
-`jefftrack/` imports it. No Jeff-Tracker checkpoint was trained, distilled, tuned or selected
-using it — `inf_s4000.ckpt` was chosen on a synthetic occlusion bench and validated on three
-more built afterwards, all of which predate any comparison. Removing every CoTracker
-reference would cost this project the comparison and nothing else.
-
-**The residual question is yours, not this repository's.** CC-BY-NC-4.0 restricts *use*, not
-only redistribution, and `tools/benchmark.py` runs the model if you give it a path. This
-repository ships no copy and cannot run it on its own. Whether running it in your context is
-permitted is your call to make, and the script says so at the top.
-
-Publishing measured comparisons against published work is ordinary practice — CoTracker3's
-own paper tabulates competitors the same way — and a measurement is a fact about a model,
-not a derivative of its source code.
 
 ## Gated weights, and what gating does not do
 

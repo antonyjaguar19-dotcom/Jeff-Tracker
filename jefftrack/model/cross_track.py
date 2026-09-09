@@ -7,17 +7,18 @@ locotrack_model.py:891 --
     res = self.torch_pips_mixer(x)
 
 -- tracks are folded into the batch dimension, so the temporal transformer never sees more
-than one trajectory at a time. That is the structural difference from CoTracker, and it is
-what the occlusion measurement in METHOD.md reports from the other end: only 5.9% of
+than one trajectory at a time. That limitation is what the occlusion measurement in
+METHOD.md reports from the other end: only 5.9% of
 ground-truth-occluded frames get a position at all, because a point with nothing to look at
 has nothing to go on. A point that is hidden RIGHT NOW is not unknowable if fifty of its
 neighbours are visible and moving rigidly with it.
 
-Written from the description in the CoTracker3 paper (arXiv 2410.11831), which reports
-cross-track attention as worth +5.1 delta_avg on occluded points against +1.6 on visible
-ones (Table 3). No code, weights, or tensors here derive from the CoTracker repository,
-which is CC-BY-NC-4.0 -- see ../../LICENSES.md. Architecture is not copyrightable; source
-code is.
+ATTRIBUTION. Cross-track attention is not an idea of ours: it is implemented from the
+description in Karaev et al., arXiv:2410.11831, which reports it as worth +5.1 delta_avg
+on occluded points against +1.6 on visible ones (Table 3). This file is written from that
+description alone -- no code, weights or tensors here derive from any implementation of
+the paper, which is CC-BY-NC-4.0. Method and architecture are not copyrightable; source
+code is. See ../../docs/LICENSES.md.
 
 Shape of the thing:
 

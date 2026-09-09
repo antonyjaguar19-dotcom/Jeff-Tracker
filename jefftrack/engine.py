@@ -1,11 +1,9 @@
 """Jeff-Tracker engine -- LocoTrack (Apache-2.0) behind a stable engine interface.
 
-Why this exists: CoTracker is the tracker everyone wants and the one thing that cannot
-ship -- Meta releases its code AND its weights under CC-BY-NC-4.0. LocoTrack
-(cvlab-kaist, ECCV 2024) is Apache-2.0 end to end, and CoTracker3 itself borrows its 4D
-correlation from LocoTrack, so the two are closer relatives than the leaderboards suggest.
-See LICENSES.md for the full provenance ledger; CoTracker is deliberately not installed,
-not vendored, and not run in this folder.
+Why this exists: most of the strongest open point trackers ship under NonCommercial
+terms on both code and weights, which rules them out of a commercial pipeline. LocoTrack
+(cvlab-kaist, ECCV 2024) is Apache-2.0 end to end, so it is the base here. See LICENSES.md
+for the full provenance ledger.
 
 The public surface is deliberately a drop-in shape for an existing TAPNext-style engine:
 
@@ -58,8 +56,8 @@ DEFAULT_CKPT = os.environ.get(
 # video does not just upscale -- get_feature_grids() infers a LADDER of refinement
 # resolutions from the input size (locotrack_model.py:549 -> utils.generate_default_
 # resolutions), so a bigger model_res buys real sub-pixel accuracy at real VRAM cost.
-# 256x256 is the safe default; 384x512 is the high-accuracy setting the paper reports as
-# comparable to CoTracker.
+# 256x256 is the safe default; 384x512 is the high-accuracy setting the LocoTrack paper
+# reports, at real VRAM cost.
 DEFAULT_MODEL_RES = (256, 256)
 
 

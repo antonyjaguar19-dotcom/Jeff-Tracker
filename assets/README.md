@@ -2,7 +2,7 @@
 
 The three GIFs in this folder are rendered from **DAVIS 2017**, reached through the
 **TAP-Vid DAVIS** evaluation pack. DAVIS is the footage the whole tracking-any-point family
-demos on — TAPIR, LocoTrack, CoTracker — which is the point: the pictures are comparable by
+demos on, which is the point: the pictures are comparable by
 eye against theirs, and unlike our own footage it can be redistributed.
 
 | clip | file | licence |
@@ -92,21 +92,6 @@ line implies a path that was never travelled.
 This is a display choice, not a claim about the model. It still emits those positions; the
 coverage figures in [`../docs/METHOD.md`](../docs/METHOD.md) are what quantify how often it
 declines to commit.
-
-## Why the comparison video shows two models and the table shows three
-
-`compare_two.gif` renders Jeff-Tracker and TAPNext++, both Apache-2.0. CoTracker3 appears in
-the benchmark table and nowhere in the media.
-
-The distinction is between a measurement and an artifact. A benchmark number is a fact about
-a model: measuring one and publishing the result is ordinary practice, and CoTracker3's own
-paper tabulates its competitors the same way. A rendered frame is different — it is produced
-by running a CC-BY-NC model, and whether that output is restricted by the licence is not a
-settled question. Dropping the panel costs a third of one GIF and changes no number, so it
-is not a trade worth arguing over.
-
-`tools/make_compare.py` still accepts `--models jefftracker,tapnext,cotracker3` if you point
-it at your own copy; what is published here is two.
 
 ## The logo
 

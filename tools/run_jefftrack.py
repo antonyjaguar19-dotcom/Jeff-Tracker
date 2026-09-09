@@ -16,7 +16,7 @@ Two resolutions matter and they are not the same knob:
                  just upscaling. On a 2560-wide plate one model pixel at 256x256 is TEN
                  plate pixels, so sub-pixel plate accuracy is simply not reachable there
                  no matter how good the tracker is -- 384x512 is the setting the paper
-                 reports as comparable to CoTracker, and the one to quote numbers from.
+                 reports as its comparable setting, and the one to quote numbers from.
 """
 from __future__ import annotations
 

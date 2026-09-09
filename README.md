@@ -100,11 +100,21 @@ git clone https://github.com/antonyjaguar19-dotcom/Jeff-Tracker
 cd Jeff-Tracker
 pip install torch --index-url https://download.pytorch.org/whl/cu121   # match your CUDA
 pip install -r requirements.txt
+```
+
+The code is Apache-2.0 and public. **The trained checkpoint is gated** — request access on
+[the model page](https://huggingface.co/antonyjaguar19-dotcom/Jeff-Tracker), and once it is
+granted:
+
+```bash
+hf auth login
 python tools/fetch_weights.py --all
 ```
 
-LocoTrack is vendored under `vendor/locotrack/`, so there is nothing else to clone. Weights
-are on the Hugging Face Hub, not in git.
+LocoTrack's baseline weights are not gated, so `python tools/fetch_weights.py
+--baseline-only` needs no account and is enough to reproduce the `--arch locotrack` rows.
+
+LocoTrack itself is vendored under `vendor/locotrack/`, so there is nothing else to clone.
 
 ## Use
 

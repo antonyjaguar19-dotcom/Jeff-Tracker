@@ -20,7 +20,7 @@ much the deliverable as the code is.
 
 | artifact | licence | why it is not here |
 |---|---|---|
-| **CoTracker / CoTracker3** (Meta) | **CC-BY-NC-4.0** on code *and* weights | NonCommercial. **No CoTracker code, weights, or outputs are in this repository or in any DBtracker checkpoint.** It is not a teacher, not a distillation source, and not a selection signal — no checkpoint here was chosen, tuned, or rejected on a CoTracker number. Comparison is made against CoTracker3's *published* TAP-Vid numbers, which are a public fact and carry no licence |
+| **CoTracker / CoTracker3** (Meta) | **CC-BY-NC-4.0** on code *and* weights | NonCommercial. **No CoTracker code or weights are in this repository**, none are redistributed, and nothing here is trained, distilled or checkpoint-selected on it. It is not a dependency: `tools/benchmark.py` and `tools/make_compare.py` call it only if you point them at your own copy. Two things it *does* contribute, stated rather than glossed: the measured numbers in [BENCHMARK.md](BENCHMARK.md), and one panel of `assets/compare_three.gif`, which is rendered from its output. See "CoTracker3 in this repository" below. |
 | MFT, SpatialTracker | CC-BY-NC | same reason; evaluated elsewhere, never used here |
 
 Cross-track attention is reimplemented **from the CoTracker3 paper's description**
@@ -53,3 +53,27 @@ a measurable, recoverable price for a clean chain.
 Apache-2.0 §4 requires that you keep [`LICENSE`](../LICENSE) and [`NOTICE`](../NOTICE) with any
 copy or derivative, and state significant changes you make. `NOTICE` names LocoTrack,
 TAPIR, and Kubric; do not strip it.
+
+## CoTracker3 in this repository
+
+There is a benchmark against CoTracker3, so it is worth being exact about what that does
+and does not put into this repository.
+
+**Present:** measured metrics in [BENCHMARK.md](BENCHMARK.md), and the third panel of
+`assets/compare_three.gif`, which draws overlays computed from CoTracker3's output on
+CC BY 4.0 DAVIS footage.
+
+**Absent:** its code, its weights, any derived weights, and any dependency on it. Nothing in
+`dbtrack/` imports it. No DBtracker checkpoint was trained, distilled, tuned or selected
+using it — `inf_s4000.ckpt` was chosen on a synthetic occlusion bench and validated on three
+more built afterwards, all of which predate any comparison. Removing every CoTracker
+reference would cost this project the comparison and nothing else.
+
+**The residual question is yours, not this repository's.** CC-BY-NC-4.0 restricts *use*, not
+only redistribution, and `tools/benchmark.py` runs the model if you give it a path. This
+repository ships no copy and cannot run it on its own. Whether running it in your context is
+permitted is your call to make, and the script says so at the top.
+
+Publishing measured comparisons against published work is ordinary practice — CoTracker3's
+own paper tabulates competitors the same way — and a measurement is a fact about a model,
+not a derivative of its source code.

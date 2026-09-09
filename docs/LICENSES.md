@@ -20,7 +20,7 @@ much the deliverable as the code is.
 
 | artifact | licence | why it is not here |
 |---|---|---|
-| **CoTracker / CoTracker3** (Meta) | **CC-BY-NC-4.0** on code *and* weights | NonCommercial. **No CoTracker code or weights are in this repository**, none are redistributed, and nothing here is trained, distilled or checkpoint-selected on it. It is not a dependency: `tools/benchmark.py` and `tools/make_compare.py` call it only if you point them at your own copy. Two things it *does* contribute, stated rather than glossed: the measured numbers in [BENCHMARK.md](BENCHMARK.md), and one panel of `assets/compare_three.gif`, which is rendered from its output. See "CoTracker3 in this repository" below. |
+| **CoTracker / CoTracker3** (Meta) | **CC-BY-NC-4.0** on code *and* weights | NonCommercial. **No CoTracker code or weights are in this repository**, none are redistributed, and nothing here is trained, distilled or checkpoint-selected on it. It is not a dependency: `tools/benchmark.py` and `tools/make_compare.py` call it only if you point them at your own copy. What it *does* contribute, stated rather than glossed: the measured numbers in [BENCHMARK.md](BENCHMARK.md). No rendered output of it is published here. See "CoTracker3 in this repository" below. |
 | MFT, SpatialTracker | CC-BY-NC | same reason; evaluated elsewhere, never used here |
 
 Cross-track attention is reimplemented **from the CoTracker3 paper's description**
@@ -59,11 +59,14 @@ TAPIR, and Kubric; do not strip it.
 There is a benchmark against CoTracker3, so it is worth being exact about what that does
 and does not put into this repository.
 
-**Present:** measured metrics in [BENCHMARK.md](BENCHMARK.md), and the third panel of
-`assets/compare_three.gif`, which draws overlays computed from CoTracker3's output on
-CC BY 4.0 DAVIS footage.
+**Present:** measured metrics in [BENCHMARK.md](BENCHMARK.md) — numbers, and nothing else.
 
-**Absent:** its code, its weights, any derived weights, and any dependency on it. Nothing in
+**Absent:** its code, its weights, any derived weights, any dependency on it, and any
+rendered output of it. The comparison GIF originally carried a third panel drawn from
+CoTracker3's predictions; it was removed. A benchmark number is a fact about a model, while
+a rendered frame is output produced by running one, and whether a CC-BY-NC licence reaches
+that output is genuinely unsettled. Removing the panel cost one third of one GIF and changed
+no measurement, so the question did not need answering. Nothing in
 `jefftrack/` imports it. No Jeff-Tracker checkpoint was trained, distilled, tuned or selected
 using it — `inf_s4000.ckpt` was chosen on a synthetic occlusion bench and validated on three
 more built afterwards, all of which predate any comparison. Removing every CoTracker

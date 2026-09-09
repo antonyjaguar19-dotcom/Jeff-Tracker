@@ -121,5 +121,14 @@ python tools/benchmark.py --models jefftracker,tapnext,cotracker3 --whole-clip \
 python tools/benchmark.py --models jefftracker,tapnext,cotracker3 ... --out out/benchmark.json
 
 python tools/plot_benchmark.py --json out/benchmark_whole.json --out assets/benchmark.png
-python tools/make_compare.py --clip breakdance --out assets/compare_three.gif ...
+python tools/make_compare.py --clip breakdance --models jefftracker,tapnext \
+    --out assets/compare_two.gif ...
 ```
+
+## Why the published video shows two models
+
+`assets/compare_two.gif` renders the two Apache-2.0 models. CoTracker3 is in the table above
+and not in the video: a benchmark number is a fact about a model, while a rendered frame is
+output produced by running one, and whether a CC-BY-NC licence reaches that output is not a
+settled question. `tools/make_compare.py` still accepts `cotracker3` if you point it at your
+own copy.

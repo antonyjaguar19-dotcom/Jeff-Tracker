@@ -1,12 +1,14 @@
-# Inference. Torch is left to you -- install the build that matches your CUDA.
+# --- inference -------------------------------------------------------------------
+# Torch is left to you -- install the build that matches your CUDA:
 #   pip install torch --index-url https://download.pytorch.org/whl/cu121
 einops>=0.7
 numpy>=1.24
 opencv-python>=4.8
 huggingface_hub>=0.20
 
-# Training only (Kubric/MOVi-E is distributed as TFRecord shards, so reading it
-# needs tensorflow even though nothing is trained with it). Install these into a
-# separate prefix -- see METHOD.md.
-#   tensorflow-cpu
-#   tensorflow_datasets
+# --- demo GIFs (tools/make_demo.py) ----------------------------------------------
+pillow>=10.0
+
+# --- evaluation and training -----------------------------------------------------
+# Heavier, and NOT needed to run the tracker. Install with:
+#   pip install -r requirements.txt -r requirements-eval.txt

@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dbtracker"
+version = "0.1.0"
+description = "An Apache-2.0 point tracker in the CoTracker class, built on LocoTrack"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+keywords = ["point-tracking", "tracking-any-point", "video", "computer-vision"]
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+]
+dependencies = [
+    "einops>=0.7",
+    "numpy>=1.24",
+    "opencv-python>=4.8",
+    "huggingface_hub>=0.20",
+]
+
+[project.optional-dependencies]
+demo = ["pillow>=10.0"]
+# Evaluation and training. TAP-Vid's official metric code lives in a module whose
+# top-level imports pull tensorflow in, and Kubric/MOVi-E ships as TFRecord shards.
+# Inference imports none of this.
+eval = ["absl-py", "mediapy", "scipy", "tensorflow-cpu", "tensorflow_datasets"]
+
+[project.urls]
+Homepage = "https://github.com/antonyjaguar19-dotcom/DBtracker"
+Weights = "https://huggingface.co/antonyjaguar19-dotcom/DBtracker"
+
+[tool.setuptools]
+# vendor/ is redistributed LocoTrack, reached via sys.path by dbtrack.paths rather than
+# installed as a package -- keeping its import names exactly as upstream has them.
+packages = ["dbtrack", "dbtrack.model", "dbtrack.data"]

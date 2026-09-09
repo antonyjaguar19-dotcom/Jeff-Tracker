@@ -17,7 +17,8 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-WEIGHTS = os.path.join(HERE, "weights")
+ROOT = os.path.dirname(HERE)          # the repo root, one level up
+WEIGHTS = os.path.join(ROOT, "weights")
 
 # The DBtracker checkpoints. Set BTR_HF_REPO to point at a fork or a private mirror.
 HF_REPO = os.environ.get("BTR_HF_REPO", "antonyjaguar19-dotcom/DBtracker")

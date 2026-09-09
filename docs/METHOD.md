@@ -18,13 +18,13 @@ Rules this document follows:
 Nothing below is believable without these.
 
 ```
-python dbtrack_engine.py --selftest
+python -m dbtrack.engine --selftest
   median 0.100 px on a known rigid translation with exact GT      PASS
 
-python score_occlusion.py --control
+python tools/score_occlusion.py --control
   VISIBLE / OCCLUDED / RE-ACQUIRE worst error 0.00000 px          PASS
 
-python check_identity.py
+python tools/check_identity.py
   vendor parameters : 147 shared, 0 differ, 0 lost, 63 added by DBTrack
   cross block 0/1/2   out_proj zero: True
   tracks / occlusion / expected_dist   max |diff| 0.000e+00   identical True
@@ -41,7 +41,7 @@ export** to `--arch locotrack`.
 ## The port, against the authors' own published numbers
 
 ```
-python eval_tapvid.py --mode strided
+python tools/eval_tapvid.py --mode strided
 ```
 
 | TAP-Vid DAVIS, strided, 256×256 | AJ | δ_avg | OA |
@@ -134,11 +134,11 @@ and was never told about the references — reported 6.84 / 6.63 / 6.28 px for t
 three runs. It was scoring corners seeded up to 25 px away from the reference feature, so
 the "error" was mostly that offset. The tell was that a 2.7× resolution change moved the
 number by 0.6 px, which is not what a resolution change does to a tracker.
-`eval_vs_manual.py`, which seeds **on** the reference points, exists because of this.
+`tools/eval_vs_manual.py`, which seeds **on** the reference points, exists because of this.
 
 ## Occlusion
 
-`make_occlusion_bench.py` composites moving textured occluders over the synthetic bench,
+`tools/make_occlusion_bench.py` composites moving textured occluders over the synthetic bench,
 keeping exact ground truth. Rebuilding from the same `--seed` produces an identical
 `occluders.json` and **pixel-identical frames**, so these numbers can be re-measured
 elsewhere rather than merely quoted.
@@ -243,7 +243,7 @@ for a renderer that cannot run.
 ### Data control pass — before a single training step
 
 ```
-python probe_data.py --batches 2
+python tools/probe_data.py --batches 2
 
   video (1,24,256,256,3) float32 in [-1.00, 0.80]        range ok
   query_points (1,256,3)  target_points (1,256,24,2)  occluded (1,256,24)
@@ -294,7 +294,7 @@ ours, occ weight 0.2   65.46984863
 ```
 
 So the two objectives are one flag apart, and a difference between two runs is attributable
-to that flag — the same discipline `check_identity.py` enforces for the weights.
+to that flag — the same discipline `tools/check_identity.py` enforces for the weights.
 
 ## Result
 

@@ -30,8 +30,9 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-if HERE not in sys.path:
-    sys.path.insert(0, HERE)
+ROOT = os.path.dirname(HERE)
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 
 from dbtrack.paths import add_vendor_to_path  # noqa: E402
 
@@ -41,7 +42,7 @@ import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
 from dbtrack.model.dbtrack_model import load_dbtrack  # noqa: E402
-from dbtrack_engine import DEFAULT_CKPT, _load_locotrack  # noqa: E402
+from dbtrack.engine import DEFAULT_CKPT, _load_locotrack  # noqa: E402
 
 
 def main() -> int:

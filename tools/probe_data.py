@@ -7,7 +7,7 @@ model's forward pass actually expects:
 
   * shapes and dtypes match LocoTrack's signature (video [B,T,H,W,3], query 'tyx',
     targets 'xy');
-  * the video is really in [-1, 1], because dbtrack_engine feeds inference in that range
+  * the video is really in [-1, 1], because dbtrack.engine feeds inference in that range
     and a training set in [0, 255] would teach the model a different input distribution
     than it is ever shown afterwards;
   * query points land ON their own track: target_points at the query frame must equal the
@@ -27,8 +27,9 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-if HERE not in sys.path:
-    sys.path.insert(0, HERE)
+ROOT = os.path.dirname(HERE)
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 

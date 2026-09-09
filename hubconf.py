@@ -25,7 +25,7 @@ def _ckpt(filename, repo_id=None, repo_type="model"):
     a misleading thing to hand a user, so it is re-raised as what it actually is.
     """
     from huggingface_hub import hf_hub_download          # noqa: PLC0415
-    repo_id = repo_id or os.environ.get("JEFFTRACK_HF_REPO", "antonyjaguar19-dotcom/Jeff-Tracker")
+    repo_id = repo_id or os.environ.get("JEFFTRACK_HF_REPO", "JeffyAntony/Jeff-Tracker")
     try:
         return hf_hub_download(repo_id=repo_id, filename=filename, repo_type=repo_type)
     except Exception as exc:                             # noqa: BLE001

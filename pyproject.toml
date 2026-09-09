@@ -31,7 +31,7 @@ eval = ["absl-py", "mediapy", "scipy", "tensorflow-cpu", "tensorflow_datasets"]
 
 [project.urls]
 Homepage = "https://github.com/antonyjaguar19-dotcom/Jeff-Tracker"
-Weights = "https://huggingface.co/antonyjaguar19-dotcom/Jeff-Tracker"
+Weights = "https://huggingface.co/JeffyAntony/Jeff-Tracker"
 
 [tool.setuptools]
 # vendor/ is redistributed LocoTrack, reached via sys.path by jefftrack.paths rather than

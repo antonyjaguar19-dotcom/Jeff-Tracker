@@ -79,6 +79,23 @@
       "seconds_per_frame": 0.046,
       "peak_vram_gb": 12.22
     },
-    "headroom": "12.22 GB of 16 fits and leaves 3.8 GB, at 400 seeds. VRAM scales with track count and the benches use 600, so check headroom at your own seed count before committing to 384x512 on a long 4K shot."
+    "headroom": "12.22 GB of 16, and it does NOT scale with track count -- measured flat to the last decimal from 400 to 3025 seeds on the same shot (12.22 GB throughout, while s/frame went 0.040 -> 0.182). An earlier version of this field said to check headroom at your own seed count; that was wrong. VRAM is bounded on both axes: query_chunk_size (64) bounds the track dimension and the engine's auto-window caps the temporal window at 120 frames at 384x512 and 250 at 256x256, so a longer clip is windowed rather than held whole. 12.22 GB is one window of feature volume.",
+    "vram_vs_seed_count": {
+      "note": "peak GB at 384x512 on a 312-frame 3840x2160 shot, uniform grid seeding",
+      "400": 12.22,
+      "625": 12.22,
+      "1024": 12.22,
+      "1521": 12.22,
+      "2025": 12.22,
+      "3025": 12.22,
+      "seconds_per_frame": {
+        "400": 0.04,
+        "625": 0.055,
+        "1024": 0.072,
+        "1521": 0.098,
+        "2025": 0.125,
+        "3025": 0.182
+      }
+    }
   }
 }

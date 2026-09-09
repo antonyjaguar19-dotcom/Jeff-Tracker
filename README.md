@@ -49,15 +49,19 @@ and **[docs/METHOD.md](docs/METHOD.md)**.
 Against **CoTracker3** and **TAPNext++** on four synthetic occlusion benches with exact
 ground truth, same footage and the same 600 seeds for every engine:
 
-| at matched resolution (384x512) | Jeff-Tracker | CoTracker3 |
+| 384x512, matched coverage | Jeff-Tracker | CoTracker3 |
 |---|---|---|
-| visible error, median | **0.62 - 0.66 px** | 1.17 - 1.30 px |
+| visible error, median | **0.60 - 0.64 px** | 1.16 - 1.28 px |
+| visible error, worst | **3.65 - 4.30 px** | 5.38 - 5.83 px |
 | re-acquire after an occluder | **0.85 - 1.06 px** | 1.36 - 1.62 px |
 | occluded error, mean | 2.62 - 3.82 px | **1.69 - 1.99 px** |
-| visible error, worst | 6.8 - 91.8 px | **5.4 - 5.8 px** |
 
-Jeff-Tracker localises about **2x tighter** and returns from occlusions closer. CoTracker3
-is still **~1.5x better while a point is hidden**, and has a far steadier worst case.
+Jeff-Tracker localises about **2x tighter**, returns from occlusions closer, and has the
+steadier worst case once both engines are read at the same coverage. CoTracker3 is still
+**~1.5x better while a point is actually hidden** — that gap is real and unaddressed.
+
+Coverage matters here: CoTracker3 thresholds visibility at 0.9 inside its own predictor, so
+comparing its output to an ungated one compares a gated result with a raw one.
 
 Resolution is doing a lot of that work: at the 256x256 default the localisation advantage
 disappears, and 384x512 costs 10.2 GB against 2.8 GB. Full tables, method, and what is and
@@ -67,7 +71,7 @@ CoTracker3 is CC-BY-NC-4.0. It is not vendored, redistributed, or used to train 
 anything here - `tools/bench3.py` loads it from a path you supply, and only to measure.
 See [docs/LICENSES.md](docs/LICENSES.md).
 
-![Comparison at matched resolution](assets/comparison_matched_resolution.png)
+![Comparison at matched coverage](assets/coverage_matched.png)
 
 ## Two things it does not do
 

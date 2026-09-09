@@ -2,7 +2,7 @@
 
 <img src="assets/logo.png" width="62%" alt="Jeff-Tracker">
 
-**An Apache-2.0 model for tracking any point through a video.**
+**Track any point through a video.**
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Weights](https://img.shields.io/badge/%F0%9F%A4%97%20weights-Hugging%20Face-yellow)](https://huggingface.co/JeffyAntony/Jeff-Tracker)
@@ -20,8 +20,8 @@ it can see it, and how sure it is. It runs at **0.0065 s/frame** and returns a *
 per-frame confidence** alongside every track.
 
 It is [LocoTrack-B](https://github.com/cvlab-kaist/locotrack) with cross-track attention
-added and fine-tuned on MOVi-E. Model code, base weights and training data are Apache-2.0
-end to end, so it can be used commercially without a licence review.
+added — the tracks attend to each other, so a point that is hidden can be inferred from the
+neighbours that are still visible — then fine-tuned on MOVi-E for occlusion.
 
 ## Results
 
@@ -36,11 +36,10 @@ end to end, so it can be used commercially without a licence review.
 | Occluded frames within 5 px, vs the base | **+3.4 points**, held out over three benches |
 | Speed | **0.0065 s/frame** · 6.85 GB peak on 4K |
 
-The right-hand panel is what the fine-tune bought: occluded accuracy, measured on three
-synthetic benches with exact ground truth that were built *after* the shipping checkpoint
-was chosen. The left panel is the control that stops it being quoted alone — on DAVIS the
-model is level with its base, which is the honest result and the one worth knowing, since a
-fine-tune that quietly lost general accuracy would be a bad trade.
+The right-hand panel is what the fine-tune bought: occluded accuracy on three synthetic
+benches with exact ground truth, built *after* the shipping checkpoint was selected. The
+left panel is the control that stops it being read alone — on DAVIS the model is level with
+its base, so the occlusion gain did not cost general accuracy.
 
 Protocol, controls and per-checkpoint numbers: **[docs/BENCHMARK.md](docs/BENCHMARK.md)**
 and **[docs/METHOD.md](docs/METHOD.md)**.
@@ -80,18 +79,17 @@ pip install torch --index-url https://download.pytorch.org/whl/cu121   # match y
 pip install -r requirements.txt
 ```
 
-The code is Apache-2.0 and public. **The trained checkpoint is gated** — request access on
-[the model page](https://huggingface.co/JeffyAntony/Jeff-Tracker), and once it is granted:
+The trained checkpoint is gated. Request access on
+[the model page](https://huggingface.co/JeffyAntony/Jeff-Tracker); once granted:
 
 ```bash
 hf auth login
 python tools/fetch_weights.py --all
 ```
 
-LocoTrack's baseline weights are not gated, so `python tools/fetch_weights.py
---baseline-only` needs no account and is enough to reproduce the `--arch locotrack` rows.
-
-LocoTrack itself is vendored under `vendor/locotrack/`, so there is nothing else to clone.
+`python tools/fetch_weights.py --baseline-only` fetches the LocoTrack baseline without an
+account, which is enough to reproduce the `--arch locotrack` rows. LocoTrack is vendored
+under `vendor/locotrack/`, so there is nothing else to clone.
 
 ## Use
 
@@ -148,15 +146,15 @@ attention you add; `0.2` weights an occluded point at one fifth of a visible one
 jefftrack/ engine.py  io.py  losses.py  model/  data/
 tools/     run, train, benchmark, demos, control passes
 docs/      METHOD.md (measurements)  BENCHMARK.md (protocol)  LICENSES.md (provenance)
-assets/    README media + source attribution
-vendor/    LocoTrack, redistributed Apache-2.0
+assets/    README media
+vendor/    LocoTrack, vendored
 ```
 
-## Licence
+## License
 
-Apache-2.0 — [LICENSE](LICENSE), [NOTICE](NOTICE), and
-[docs/LICENSES.md](docs/LICENSES.md) for the artifact-by-artifact ledger.
-Demo footage is DAVIS (CC BY 4.0); attribution in [assets/README.md](assets/README.md).
+Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE); provenance for every
+third-party artifact is in [docs/LICENSES.md](docs/LICENSES.md). Demo footage is from
+DAVIS — see [assets/README.md](assets/README.md).
 
 ## Citing
 

@@ -31,9 +31,11 @@ TAP-Vid DAVIS, 30 clips, 256×256, the reference metric called unmodified.
 
 <img src="assets/benchmark.png" width="100%" alt="AJ, delta_avg and OA for the three trackers, and accuracy against cost">
 
-<img src="assets/compare_three.gif" width="100%" alt="the three trackers on the same clip with the same seeds">
+<img src="assets/compare_two.gif" width="100%" alt="Jeff-Tracker and TAPNext++ on the same clip with the same seeds">
 
-*Same clip, same seeds, same overlay code — so what differs is the trackers.*
+*Same clip, same seeds, same overlay code — so what differs is the trackers. The two
+Apache-2.0 models are shown; CoTracker3 is in the table but not the video, because a
+rendered frame is output from a CC-BY-NC model and the numbers are not.*
 
 | model | licence | AJ | δ_avg | OA | s/frame |
 |---|---|---|---|---|---|

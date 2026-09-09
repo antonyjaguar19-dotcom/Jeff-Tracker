@@ -108,3 +108,33 @@ def write_3de(path, tracks, vis, first_frame, plate_h, prefix="JT"):
             for t in frames:
                 x, y = tracks[t, i]
                 fh.write("{} {:.6f} {:.6f}\n".format(first_frame + t, x, plate_h - y))
+
+
+def read_3de(path):
+    """Read back what write_3de wrote: {track_name: {frame: (x, y)}} in 3DE coordinates.
+
+    The mirror of write_3de, and the reason it exists here rather than in a tool: two
+    tools needed it and both reached into the studio application this model was extracted
+    from (`from app.compare_tracks import load_tracks`), which is not part of this
+    repository. On a clean clone they raised ModuleNotFoundError, so the documented
+    verification steps could not run at all.
+
+    Y is NOT flipped on the way back -- callers that need raster coordinates flip with the
+    plate height, the same way write_3de flipped on the way out. Gaps are expected: a track
+    occluded for part of the shot simply has no entry for those frames.
+    """
+    with open(path, "r", encoding="utf-8", errors="ignore") as fh:
+        tok = fh.read().split()
+    i = 0
+    n = int(tok[i]); i += 1
+    out = {}
+    for _ in range(n):
+        name = tok[i]; i += 1
+        i += 1                                   # colour id, unused
+        count = int(tok[i]); i += 1
+        pts = {}
+        for _ in range(count):
+            pts[int(tok[i])] = (float(tok[i + 1]), float(tok[i + 2]))
+            i += 3
+        out[name] = pts
+    return out

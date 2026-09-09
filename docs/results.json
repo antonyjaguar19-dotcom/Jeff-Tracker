@@ -18,21 +18,42 @@
     "note": "Synthetic occlusion benches with exact ground truth, 8 occluders each, built with tools/make_occlusion_bench.py --occluders 8 --seed N. Held out: the shipping checkpoint was selected on an earlier bench, before these three existed.",
     "metric": "percentage of ground-truth-occluded frames placed within 5 px",
     "benches": [
-      {"name": "occ11", "frame_cover_pct": 17.8, "base": 70.0, "jefftracker": 73.9},
-      {"name": "occ12", "frame_cover_pct": 21.5, "base": 59.4, "jefftracker": 63.0},
-      {"name": "occ13", "frame_cover_pct": 24.4, "base": 59.3, "jefftracker": 62.1}
+      {
+        "name": "occ11",
+        "frame_cover_pct": 17.8,
+        "base": 70.0,
+        "jefftracker": 73.9
+      },
+      {
+        "name": "occ12",
+        "frame_cover_pct": 21.5,
+        "base": 59.4,
+        "jefftracker": 63.0
+      },
+      {
+        "name": "occ13",
+        "frame_cover_pct": 24.4,
+        "base": 59.3,
+        "jefftracker": 62.1
+      }
     ],
     "mean_gain_points": 3.4
   },
   "confidence": {
     "note": "The model's own per-frame confidence used as a detector for its own >5 px frames.",
     "auc": 0.955,
-    "at_threshold_0_5": {"kept_pct": 87.9, "mean_px": 1.36, "p99_px": 4.08, "max_px": 9.0}
+    "at_threshold_0_5": {
+      "kept_pct": 87.9,
+      "mean_px": 1.36,
+      "p99_px": 4.08,
+      "max_px": 9.0
+    }
   },
   "localisation": {
     "note": "Synthetic bench, exact homography ground truth, 600 tracks, raw neural output with no refinement stage.",
     "mean_err_px_256": 1.03,
     "mean_err_px_384x680": 0.54,
     "pixel_locking_px": 0.0005
-  }
+  },
+  "scoring_note": "tools/score_occlusion.py now excludes samples whose ground truth has left the plate (a point outside the picture cannot be tracked) and can score raw model output ungated via --npz. Neither change alters the rows in this file: the occluded within-5px figures were re-measured with the exclusion and move by at most 0.7 points (occ11 73.9->74.6, occ12 63.0->63.1, occ13 62.1->62.6), all slightly favourable. The exclusion does matter for maxima and means, which are order statistics -- on one bench it moved the worst visible error from 389.30 px to 16.86 px. See COMPARISON.md."
 }

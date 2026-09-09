@@ -1,0 +1,18 @@
+# Phase 1: resolution was the confound
+
+Matching CoTracker3's internal resolution roughly HALVES Jeff-Tracker's
+visible error and its re-acquire error, on all four benches.
+
+At 384x512 Jeff-Tracker beats CoTracker3 on visible mean, visible median
+and re-acquire EVERYWHERE -- 0.62-0.66 px median against 1.17-1.30.
+
+CoTracker3 keeps two advantages: occluded accuracy, still ~1.5x better,
+and a rock-steady tail -- its worst visible error is 5.4-5.8 px on every
+bench while ours ranges 6.8 to 91.8.
+
+Attention scope is a NON-FACTOR. Training used 256 tracks per chunk and
+inference defaults to 64; matching them moves nothing past the third
+decimal. That bounds what the cross-track block is currently doing.
+
+~ 384x512 costs 10.2 GB against 2.8 GB -- CoTracker3's own bracket, so the
+~ fair comparison is also the expensive one.

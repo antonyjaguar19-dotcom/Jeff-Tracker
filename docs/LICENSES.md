@@ -20,7 +20,7 @@ much the deliverable as the code is.
 
 | artifact | licence | why it is not here |
 |---|---|---|
-| **CoTracker / CoTracker3** (Meta) | **CC-BY-NC-4.0** on code *and* weights | NonCommercial, so it is not usable in a commercial pipeline and is not used here. **No CoTracker code, weights or outputs are in this repository**, none are redistributed, and no checkpoint is trained, distilled or selected on it. The cross-track attention idea comes from its paper and is credited below; an idea is not an implementation. |
+| **CoTracker / CoTracker3** (Meta) | **CC-BY-NC-4.0** on code *and* weights | NonCommercial, so it is not usable in a commercial pipeline and is not part of this model. **No CoTracker code or weights are in this repository** and none are redistributed; `tools/bench3.py` loads it from a path the user supplies. No checkpoint here is trained, distilled or selected on it. It **has** been run, to produce the comparison measurements in [`COMPARISON.md`](COMPARISON.md) — see [Running CoTracker3 for comparison](#running-cotracker3-for-comparison) below. The cross-track attention idea comes from its paper and is credited below; an idea is not an implementation. |
 | MFT, SpatialTracker | CC-BY-NC | same reason; evaluated elsewhere, never used here |
 
 **Idea attribution.** Cross-track attention, and the `(1_occ/5 + 1_vis)` occluded-position
@@ -77,3 +77,37 @@ a hosting one. It has not been taken here.
 
 The base LocoTrack weights this is fine-tuned from remain ungated and Apache-2.0 at their
 own source, so nothing about this arrangement restricts access to upstream work.
+
+## Running CoTracker3 for comparison
+
+This section exists because an earlier version of the row above read *"no CoTracker code,
+weights or outputs are in this repository"*, and publishing `COMPARISON.md` made the last
+third of that false. A provenance document that describes a policy the project no longer
+follows is worse than no document, so the ledger is corrected rather than left standing.
+
+**What is true.** CoTracker3 has been run on the author's own machine to measure it against
+Jeff-Tracker on synthetic benches with exact ground truth. The numbers from those runs are
+published in `COMPARISON.md`.
+
+**What is still true, and is the part that matters for anyone using this repository:**
+
+- no CoTracker code or weights are vendored, downloaded, or redistributed here.
+  `tools/bench3.py` reads `JT_COTRACKER_DIR` / `JT_COTRACKER_CKPT` and reports the engine
+  as unavailable if they are unset
+- no CoTracker output was used as a training target, a teacher, or a distillation source
+- no checkpoint in this repository was selected, tuned, or rejected on a CoTracker number.
+  The shipping checkpoint was chosen before any of these comparisons existed
+- the cross-track attention block is written from the paper's description. Architecture is
+  not copyrightable; source code is, and none was consulted
+
+**The residual risk, stated plainly.** CC-BY-NC-4.0 restricts *use*, not only distribution,
+and running a NonCommercial model to inform a commercially-licensed one is a use. The
+position taken here is that benchmarking a competitor and publishing the measurement is
+comparison rather than exploitation, and that nothing derived from those runs enters the
+weights. That is a judgement, not a legal opinion, and it is recorded so anyone relying on
+this repository's licence chain can weigh it themselves.
+
+**If you need the chain clean of this entirely:** every number in `METHOD.md`,
+`BENCHMARK.md` and `results.json` predates and does not depend on any CoTracker run. Ignore
+`COMPARISON.md` and the provenance is Apache-2.0 end to end — Apache code, Apache base
+weights, Apache training data.

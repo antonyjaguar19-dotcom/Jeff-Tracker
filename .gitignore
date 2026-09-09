@@ -10,3 +10,4 @@ __pycache__/
 *.pth
 *.npz
 *.mp4
+/tools/out/

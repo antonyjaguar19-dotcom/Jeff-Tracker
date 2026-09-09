@@ -44,6 +44,31 @@ its base, so the occlusion gain did not cost general accuracy.
 Protocol, controls and per-checkpoint numbers: **[docs/BENCHMARK.md](docs/BENCHMARK.md)**
 and **[docs/METHOD.md](docs/METHOD.md)**.
 
+## Comparison
+
+Against **CoTracker3** and **TAPNext++** on four synthetic occlusion benches with exact
+ground truth, same footage and the same 600 seeds for every engine:
+
+| at matched resolution (384x512) | Jeff-Tracker | CoTracker3 |
+|---|---|---|
+| visible error, median | **0.62 - 0.66 px** | 1.17 - 1.30 px |
+| re-acquire after an occluder | **0.85 - 1.06 px** | 1.36 - 1.62 px |
+| occluded error, mean | 2.62 - 3.82 px | **1.69 - 1.99 px** |
+| visible error, worst | 6.8 - 91.8 px | **5.4 - 5.8 px** |
+
+Jeff-Tracker localises about **2x tighter** and returns from occlusions closer. CoTracker3
+is still **~1.5x better while a point is hidden**, and has a far steadier worst case.
+
+Resolution is doing a lot of that work: at the 256x256 default the localisation advantage
+disappears, and 384x512 costs 10.2 GB against 2.8 GB. Full tables, method, and what is and
+is not held equal: **[docs/COMPARISON.md](docs/COMPARISON.md)**.
+
+CoTracker3 is CC-BY-NC-4.0. It is not vendored, redistributed, or used to train or select
+anything here - `tools/bench3.py` loads it from a path you supply, and only to measure.
+See [docs/LICENSES.md](docs/LICENSES.md).
+
+![Comparison at matched resolution](assets/comparison_matched_resolution.png)
+
 ## Two things it does not do
 
 <table>
@@ -145,7 +170,8 @@ attention you add; `0.2` weights an occluded point at one fifth of a visible one
 ```
 jefftrack/ engine.py  io.py  losses.py  model/  data/
 tools/     run, train, benchmark, demos, control passes
-docs/      METHOD.md (measurements)  BENCHMARK.md (protocol)  LICENSES.md (provenance)
+docs/      METHOD.md (measurements)  BENCHMARK.md (protocol)
+           COMPARISON.md (vs CoTracker3 & TAPNext++)  LICENSES.md (provenance)
 assets/    README media
 vendor/    LocoTrack, vendored
 ```

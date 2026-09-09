@@ -40,7 +40,7 @@ os.environ.setdefault("OPENCV_IO_ENABLE_OPENEXR", "1")
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
-from app.compare_tracks import load_tracks  # noqa: E402
+from jefftrack.io import read_3de as load_tracks  # noqa: E402
 from jefftrack.engine import JeffTrackEngine, DEFAULT_CKPT  # noqa: E402
 from jefftrack.io import list_frames, read_frame  # noqa: E402
 

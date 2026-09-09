@@ -93,6 +93,29 @@ This is a display choice, not a claim about the model. It still emits those posi
 coverage figures in [`../docs/METHOD.md`](../docs/METHOD.md) are what quantify how often it
 declines to commit.
 
+## The comparison score sheets
+
+`comparison_default_settings.png` and `comparison_matched_resolution.png` are generated,
+not drawn: `tools/score_sheet.py` re-scores every `.npz` a benchmark run produced and
+renders the page from those numbers, so the sheets cannot drift from the tables in
+[`../docs/COMPARISON.md`](../docs/COMPARISON.md).
+
+```bash
+python tools/score_sheet.py --tag phase0
+python tools/score_sheet.py --tag phase1 \
+    --engines "jefftrack:Jeff-Tracker 256x256:#3987e5,jefftrack_r384x512:Jeff-Tracker 384x512:#c98500,cotracker3:CoTracker3:#199e70,tapnext:TAPNext++:#d95926" \
+    --verdict docs/verdicts/phase1.txt
+```
+
+They contain no footage - only measurements. The four benches behind them are synthetic and
+built by `tools/make_occlusion_bench.py`, so nothing in these images is derived from
+licensed video.
+
+Series colours are fixed per engine so two sheets can be laid side by side, and the set was
+checked for colour-blind separation before use rather than by eye (worst adjacent CVD delta-E
+9.4, worst normal-vision delta-E 20.9, all four at or above 3:1 contrast on the sheet's
+surface).
+
 ## The logo
 
 `logo.png` is the project's own mark, supplied by the repository owner. It is cropped from

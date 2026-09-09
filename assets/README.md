@@ -9,7 +9,7 @@ eye against theirs, and unlike our own footage it can be redistributed.
 |---|---|---|
 | `breakdance` | `demo_grid.gif` | DAVIS video: **CC BY 4.0** |
 | `dance-twirl` | `demo_confidence.gif` | DAVIS video: **CC BY 4.0** |
-| `libby` | `demo_occlusion.gif` | DAVIS video: **CC BY 4.0** |
+| `horsejump-high` | `demo_occlusion.gif` | DAVIS video: **CC BY 4.0** |
 
 **DAVIS** — *A Benchmark Dataset and Evaluation Methodology for Video Object Segmentation*,
 Perazzi et al., CVPR 2016, and *The 2017 DAVIS Challenge on Video Object Segmentation*,
@@ -37,8 +37,9 @@ python tools/make_demo.py --clip breakdance  --mode grid --grid 14 --tail 12 \
     --frames 55 --width 460 --fps 12 --colors 64 --out assets/demo_grid.gif
 python tools/make_demo.py --clip dance-twirl --mode conf --grid 12 --tail 8 \
     --frames 55 --width 460 --fps 12 --colors 64 --out assets/demo_confidence.gif
-python tools/make_demo.py --clip libby       --mode occl --grid 12 --tail 8 \
-    --frames 49 --width 460 --fps 12 --colors 64 --out assets/demo_occlusion.gif
+python tools/make_demo.py --clip horsejump-high --mode occl --grid 12 --tail 4 \
+    --drop-after 8 --frames 50 --width 460 --fps 12 --colors 64 \
+    --out assets/demo_occlusion.gif
 ```
 
 ## Why these three clips
@@ -59,9 +60,35 @@ Picked on measured coverage across ten DAVIS clips, not on how they look.
 | motocross-jump | 40 | 18.1% | 0.182 |
 
 `breakdance` has a locked-off camera, so only genuinely moving points draw a trail and a
-dense grid stays legible. On a panning clip such as `horsejump-high` every background point
-streaks across the frame — correct tracking, unreadable picture.
+dense grid stays legible.
 
-`libby` sits near the bottom of that table at 30.6%, and it is in here **because** of that.
-It is the occlusion demo: the hollow rings are frames the model declines to place. Choosing
-only the clips at the top of this table would be a brochure.
+`horsejump-high` is the occlusion panel. It pans, so its tail is cut to 4 frames — at 12
+the background streaks across the whole frame, which is correct tracking and an unreadable
+picture. It was chosen over `libby` (30.6% visible) on what the panel actually shows:
+
+| clip | filled | hollow — declined, held | retired |
+|---|---|---|---|
+| horsejump-high | 65.4% | **12.6%** | 21.9% |
+| goat | 72.9% | 8.8% | 18.3% |
+
+`libby` is the most literal occlusion in DAVIS — a dog walks behind a tree — but by the
+time it is behind the trunk almost every track has retired, so the panel reads as "the
+overlay vanished" rather than showing the model declining to place points. A demo that
+communicates nothing is not more honest for being dramatic.
+
+## How occluded frames are drawn, and why
+
+The overlay never draws a position the model has not committed to. On a frame it calls
+occluded, the position it emits is unconstrained — nothing in the loss pins it there — so
+it wanders, and an earlier version of these GIFs drew those wandering points as rings
+flying across the frame. That was noise being presented as output.
+
+A point that goes occluded is now **held at its last committed position**, drawn as a
+hollow ring, and **retired entirely after 8 frames** (`--drop-after`). Tail segments longer
+than 20% of the frame width are skipped too: a jump that large between two frames the model
+both calls visible is a re-acquisition landing elsewhere, not motion, and drawing it as a
+line implies a path that was never travelled.
+
+This is a display choice, not a claim about the model. It still emits those positions; the
+coverage figures in [`../docs/METHOD.md`](../docs/METHOD.md) are what quantify how often it
+declines to commit.

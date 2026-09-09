@@ -63,24 +63,53 @@ def conf_color(c: float):
     return (0, int(255 * c), int(255 * (1.0 - c)))
 
 
-def draw(frame_bgr, tracks, vis, conf, t, colors, mode, tail):
+def draw(frame_bgr, tracks, vis, conf, t, colors, mode, tail,
+         drop_after=8, max_step_frac=0.2):
+    """Overlay frame `t`.
+
+    One rule governs everything here: **never draw a position the model has not
+    committed to.** On a frame it calls occluded the position it emits is unconstrained --
+    nothing in the loss pins it, so it wanders, and drawing it produced rings flying across
+    the frame that were pure noise. So a point that has gone occluded is held at its last
+    committed position, dimmed, and retired entirely after `drop_after` frames.
+
+    That is a display choice, not a claim: the model still emits those positions, and the
+    coverage figures in docs/METHOD.md are what quantify how often it declines. Holding the
+    marker shows the track stopping, which is the honest reading of a gap, instead of
+    implying the tracker is confidently following something.
+
+    Tail segments are also skipped when a single step exceeds `max_step_frac` of the frame
+    width. A jump that large between two frames the model both calls visible is a
+    re-acquisition landing elsewhere, not motion, and drawing it as a line implies a path
+    that was never travelled.
+    """
     out = frame_bgr.copy()
-    n = tracks.shape[1]
-    for i in range(n):
-        t0 = max(0, t - tail)
-        seg, sv = tracks[t0:t + 1, i], vis[t0:t + 1, i]
+    H, W = out.shape[:2]
+    max_step = max_step_frac * W
+    for i in range(tracks.shape[1]):
+        seen = vis[:t + 1, i]
+        if not seen.any():
+            continue                       # never committed to yet -- nothing to draw
+        last = int(np.nonzero(seen)[0][-1])
+        gap = t - last
+        if gap > drop_after:
+            continue                       # given up on long enough ago: retire it
+
         col = colors[i] if mode != "conf" else conf_color(conf[t, i])
-        for k in range(1, len(seg)):
-            if sv[k] and sv[k - 1]:
-                cv2.line(out, tuple(np.int32(seg[k - 1])), tuple(np.int32(seg[k])),
-                         col, 1, cv2.LINE_AA)
-        p = tuple(np.int32(tracks[t, i]))
-        if vis[t, i]:
+        for k in range(max(1, t - tail + 1), t + 1):
+            if vis[k, i] and vis[k - 1, i]:
+                a, b = tracks[k - 1, i], tracks[k, i]
+                if float(np.hypot(b[0] - a[0], b[1] - a[1])) <= max_step:
+                    cv2.line(out, tuple(np.int32(a)), tuple(np.int32(b)),
+                             col, 1, cv2.LINE_AA)
+
+        p = tuple(np.int32(tracks[last, i]))      # the last COMMITTED position
+        if gap == 0:
             cv2.circle(out, p, 3, col, -1, cv2.LINE_AA)
         elif mode in ("occl", "conf"):
-            # A frame the model declines to place. Drawn, not dropped -- the gap is the
-            # behaviour worth showing.
-            cv2.circle(out, p, 4, (60, 60, 255), 1, cv2.LINE_AA)
+            cv2.circle(out, p, 4, (70, 70, 235), 1, cv2.LINE_AA)
+
+
     return out
 
 
@@ -125,6 +154,9 @@ def main() -> int:
     ap.add_argument("--tail", type=int, default=14)
     ap.add_argument("--colors", type=int, default=96,
                     help="GIF palette size; lower is smaller and flatter")
+    ap.add_argument("--drop-after", type=int, default=8,
+                    help="retire a track this many frames after the model "
+                         "last committed to a position for it")
     ap.add_argument("--label", default="")
     a = ap.parse_args()
 
@@ -150,7 +182,8 @@ def main() -> int:
     oh = int(round(H * ow / float(W)))
     out = []
     for t in range(T):
-        img = draw(frames[t], tracks, vis, conf, t, colors, a.mode, a.tail)
+        img = draw(frames[t], tracks, vis, conf, t, colors, a.mode, a.tail,
+                   drop_after=a.drop_after)
         if (ow, oh) != (W, H):
             img = cv2.resize(img, (ow, oh), interpolation=cv2.INTER_AREA)
         if a.label:

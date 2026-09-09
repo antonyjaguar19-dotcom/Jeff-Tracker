@@ -57,9 +57,9 @@ here worth reading. Full measurements, controls and negative results:
 <td><b>It tells you when it is unsure.</b> Points coloured by the model's own confidence,
 green through red. That signal detects its own &gt;5 px frames at AUC 0.955 and costs
 nothing — it is already computed. Keep it.</td>
-<td><b>It gaps an occlusion instead of crossing one.</b> Hollow rings are frames it
-declines to place — only ~6% of ground-truth-occluded frames get a position at all. This
-is the honest limitation, drawn rather than described.</td>
+<td><b>It gaps an occlusion instead of crossing one.</b> Hollow rings are points held at
+their last committed position — only ~6% of ground-truth-occluded frames get a position at
+all, and after 8 frames the track retires. The limitation, drawn rather than described.</td>
 </tr>
 </table>
 

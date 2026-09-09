@@ -34,13 +34,39 @@ curl -L -o tapvid_davis.zip https://storage.googleapis.com/dm-tapnet/tapvid_davi
 unzip tapvid_davis.zip -d data/
 
 python tools/make_demo.py --clip breakdance  --mode grid --grid 14 --tail 12 \
-    --frames 55 --width 460 --fps 12 --colors 64 --out assets/demo_grid.gif
+    --frames 55 --width 460 --fps 12 --colors 64 --model-res 384x512 --out assets/demo_grid.gif
 python tools/make_demo.py --clip dance-twirl --mode conf --grid 12 --tail 8 \
-    --frames 55 --width 460 --fps 12 --colors 64 --out assets/demo_confidence.gif
+    --frames 55 --width 460 --fps 12 --colors 64 --model-res 384x512 --out assets/demo_confidence.gif
 python tools/make_demo.py --clip horsejump-high --mode occl --grid 12 --tail 4 \
-    --drop-after 8 --frames 50 --width 460 --fps 12 --colors 64 \
+    --drop-after 8 --frames 50 --width 460 --fps 12 --colors 64 --model-res 384x512 \
     --out assets/demo_occlusion.gif
 ```
+
+## Rendered at 384x512 (2026-09-09)
+
+The three GIFs are now rendered with `--model-res 384x512` rather than the old 256x256
+default. **Same checkpoint** -- no retraining has happened -- only the resolution the model
+runs at, which measured roughly half the error on plate-resolution footage
+([`../docs/COMPARISON.md`](../docs/COMPARISON.md)).
+
+It genuinely applies here: the TAP-Vid pack stores DAVIS at **854x480**, so there is real
+detail for the higher resolution to use. That is *not* true of the DAVIS benchmark numbers,
+where the protocol resizes every clip to 256x256 before the model sees it and no extra
+detail exists to recover.
+
+What the model reported while rendering these three, at 384x512:
+
+| clip | points | visible | mean confidence |
+|---|---|---|---|
+| breakdance | 196 | 77.7% | 0.774 |
+| dance-twirl | 144 | 63.7% | 0.641 |
+| horsejump-high | 144 | 64.0% | 0.638 |
+
+The ten-clip selection table below was measured during clip selection at 256x256 and is left
+as it was. It exists to record *why these three clips*, and re-stating it with numbers from a
+different seeding would make it less trustworthy, not more. The direction is worth knowing
+though: at 384x512 the model is **more** discriminating and commits to slightly fewer frames,
+the same behaviour the occlusion benches show.
 
 ## Why these three clips
 

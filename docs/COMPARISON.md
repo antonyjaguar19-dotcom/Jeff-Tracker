@@ -261,6 +261,35 @@ python tools/score_sheet.py --tag phase0
 python tools/render_bench3.py --all --tag phase0
 ```
 
+## Which resolution to actually run
+
+384x512 is the accuracy recommendation, and it is not free. Both costs, measured:
+
+| | 256x256 | 384x512 |
+|---|---|---|
+| DAVIS AJ | 67.9 | **68.8** |
+| DAVIS delta_avg | 79.7 | **80.9** |
+| DAVIS OA | **89.9** | 88.0 |
+| bench median, matched coverage | 1.20 px | **0.63 px** |
+| bench worst, matched coverage | 8.68 px | **4.09 px** |
+| s/frame, 312-frame 4K shot | **0.032** | 0.046 |
+| peak VRAM, 312-frame 4K shot | **6.87 GB** | 12.22 GB |
+
+![384x512 vs 256x256](../assets/resolution_decision.png)
+
+**DAVIS barely moves, and that is expected.** The protocol resizes every clip to 256x256
+before the model sees it, so 384x512 upscales an already-downsampled frame -- there is no
+extra detail to recover, and the +0.9 AJ comes from the internal refinement ladder rather
+than from pixels. The benches, fed a 2560x1440 plate, halve. **DAVIS cannot measure this
+question**, and quoting it in either direction would misrepresent the effect.
+
+**Two real costs.** Occlusion accuracy on DAVIS falls **1.9 points** -- the model commits a
+position where it used to abstain, and OA is the metric for knowing when to keep quiet. And
+peak VRAM nearly doubles: 12.22 GB of a 16 GB card at 400 seeds, on a 312-frame 4K shot.
+VRAM scales with track count, so check headroom at your own seed count first.
+
+Same checkpoint in every row. Only `--model-res` moves.
+
 ## Limits
 
 - Four synthetic benches from one source plate. Exact truth, but one scene and one motion

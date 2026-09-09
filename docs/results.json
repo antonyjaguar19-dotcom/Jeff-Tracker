@@ -55,5 +55,30 @@
     "mean_err_px_384x680": 0.54,
     "pixel_locking_px": 0.0005
   },
-  "scoring_note": "tools/score_occlusion.py now excludes samples whose ground truth has left the plate (a point outside the picture cannot be tracked) and can score raw model output ungated via --npz. Neither change alters the rows in this file: the occluded within-5px figures were re-measured with the exclusion and move by at most 0.7 points (occ11 73.9->74.6, occ12 63.0->63.1, occ13 62.1->62.6), all slightly favourable. The exclusion does matter for maxima and means, which are order statistics -- on one bench it moved the worst visible error from 389.30 px to 16.86 px. See COMPARISON.md."
+  "scoring_note": "tools/score_occlusion.py now excludes samples whose ground truth has left the plate (a point outside the picture cannot be tracked) and can score raw model output ungated via --npz. Neither change alters the rows in this file: the occluded within-5px figures were re-measured with the exclusion and move by at most 0.7 points (occ11 73.9->74.6, occ12 63.0->63.1, occ13 62.1->62.6), all slightly favourable. The exclusion does matter for maxima and means, which are order statistics -- on one bench it moved the worst visible error from 389.30 px to 16.86 px. See COMPARISON.md.",
+  "davis_384x512": {
+    "note": "Same checkpoint at 384x512 instead of 256x256, strided. Read with the protocol in mind: TAP-Vid resizes every clip to 256x256 before the model sees it, so this upscales an already-downsampled frame and there is no extra detail to recover. The gain comes from the model's internal refinement ladder, not from more pixels -- which is why DAVIS moves about a point while plate-resolution benches halve. DAVIS cannot measure the resolution question; see COMPARISON.md.",
+    "mode": "strided",
+    "AJ": 68.8,
+    "delta_avg": 80.9,
+    "OA": 88.0,
+    "at_256x256_for_comparison": {
+      "AJ": 67.9,
+      "delta_avg": 79.7,
+      "OA": 89.9
+    },
+    "cost": "occlusion accuracy falls 1.9 points. The model commits a position where it previously abstained; on the occlusion benches those positions are right, but OA is the metric for knowing when to keep quiet, and this is a real trade."
+  },
+  "cost_on_a_real_4k_shot": {
+    "note": "312 frames of 3840x2160 decoded to 960 wide, 400 seeds, one 16 GB RTX A4000. Recorded because the resolution recommendation is only useful if it fits.",
+    "256x256": {
+      "seconds_per_frame": 0.032,
+      "peak_vram_gb": 6.87
+    },
+    "384x512": {
+      "seconds_per_frame": 0.046,
+      "peak_vram_gb": 12.22
+    },
+    "headroom": "12.22 GB of 16 fits and leaves 3.8 GB, at 400 seeds. VRAM scales with track count and the benches use 600, so check headroom at your own seed count before committing to 384x512 on a long 4K shot."
+  }
 }

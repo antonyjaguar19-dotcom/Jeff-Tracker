@@ -96,10 +96,15 @@ def free_vram():
 # Every runner returns (tracks (T,N,2) in FED pixels, vis (T,N) bool, conf (T,N) float,
 # seconds, peak_gb, res_label). Scaling to plate space happens once, outside.
 
-def run_jefftrack(frames, pts, ckpt, arch, model_res, chunk=64):
-    from jefftrack_engine import JeffTrackEngine  # noqa: PLC0415
+def run_jefftrack(frames, pts, ckpt, arch, model_res, chunk=64, window=0,
+                  anchor_query=True, window_overlap=None):
+    from jefftrack.engine import JeffTrackEngine  # noqa: PLC0415
+    # None means "whatever the engine's default is", so this file does not carry a second
+    # copy of a tuned number that would silently go stale when the engine's moves.
+    kw = {} if window_overlap is None else {"window_overlap": int(window_overlap)}
     eng = JeffTrackEngine(device="cuda", model_size="base", ckpt=ckpt,
-                          model_res=model_res, arch=arch, query_chunk_size=chunk)
+                          model_res=model_res, arch=arch, query_chunk_size=chunk,
+                          window=window, anchor_query=anchor_query, **kw)
     free_vram()
     q = np.concatenate([np.zeros((len(pts), 1), np.float32), pts], 1)
     t0 = time.time()
@@ -211,12 +216,26 @@ def parse_engine(token, default_res, default_chunk):
     res = opts.get("res", default_res)
     chunk = int(opts.get("chunk", default_chunk))
     res_t = tuple(int(v) for v in res.lower().split("x"))
+    # Windowing is part of a configuration's identity for the same reason the resolution
+    # is: on a clip longer than the window budget it changes the result more than any
+    # other single setting, and two windowings sharing a label is how a seam artifact gets
+    # read as a model property.
+    win = int(opts.get("win", 0))
+    overlap = int(opts["ov"]) if "ov" in opts else None
+    anchor = str(opts.get("anchor", "1")).lower() not in ("0", "false", "no")
     label = name
     if "res" in opts:
         label += "_r{}x{}".format(*res_t)
     if "chunk" in opts:
         label += "_c{}".format(chunk)
-    return {"name": name.strip(), "res": res_t, "chunk": chunk, "label": label}
+    if "win" in opts:
+        label += "_w{}".format(win)
+    if "ov" in opts:
+        label += "_ov{}".format(overlap)
+    if not anchor:
+        label += "_noanchor"
+    return {"name": name.strip(), "res": res_t, "chunk": chunk, "label": label,
+            "win": win, "ov": overlap, "anchor": anchor}
 
 
 # --------------------------------------------------------------------------- driver
@@ -246,8 +265,11 @@ def run_bench(shot_dir, engines, points, work_width, jt_ckpt, jt_arch, jt_res, o
         log("\n[{}] running...".format(label))
         try:
             if eng_name == "jefftrack":
-                out = run_jefftrack(frames, pts, jt_ckpt, jt_arch, spec["res"],
-                                    spec["chunk"])
+                out = run_jefftrack(frames, pts, jt_ckpt, jt_arch,
+                                    spec["res"], spec["chunk"],
+                                    window=spec.get("win", 0),
+                                    anchor_query=spec.get("anchor", True),
+                                    window_overlap=spec.get("ov"))
             elif eng_name == "tapnext":
                 out = run_tapnext(frames, pts)
             elif eng_name == "cotracker3":

@@ -169,7 +169,7 @@ computes it.
 
 On an RTX A4000 (16 GB).
 
-## Two bugs found while building this
+## Three bugs found while building this
 
 **The window seam cost 72 px.** LocoTrack is not causal — one query produces the whole clip
 — so windowing exists only to bound VRAM. The first version re-queried each track at the
@@ -183,6 +183,56 @@ cost is graceful — 0.100 px (1 window) → 0.173 (3) → 0.248 (5).
 
 This is exactly the failure class the selftest was written to catch: every one of those
 runs produced a full set of plausible-looking tracks.
+
+**The same seam, a second time — and this one destroyed track identity.** The fix above
+made the frame index and the position agree. It did not change *what the re-query means*: a
+track was still being re-defined, at every seam, as whatever pixel it was sitting on at
+frame `s`. That is harmless while a track is healthy and fatal when it is not. A point that
+is **occluded at the seam** gets re-defined as the occluder, and no later frame can undo it,
+because the appearance the model correlates against is now the wrong appearance. It cannot
+re-acquire something it no longer holds a picture of.
+
+The selftest could not see this: it has no occlusions. Neither could any bench in this repo
+— **every synthetic clip is 100 frames and the window budget at 256x256 is 250**, so no
+measurement here had ever executed the seam path at all. It surfaced only when a 261-frame
+plate, whose subject is fully hidden for ~80 frames, was rendered as an overlay and watched.
+
+The fix is to **anchor**: prepend the frames the tracks were *queried* on to every later
+window, and query each track at its own original frame and position, exactly as window 0
+does. One extra frame of context per window; the prepended frame's own output is discarded,
+since it is there to be correlated against rather than tracked.
+
+Occlusion bench, window forced to 40, scored against ground truth, ungated:
+
+| | VISIBLE mean | OCCLUDED mean | RE-ACQUIRE mean | RE-ACQUIRE p95 |
+|---|---|---|---|---|
+| no windowing | 1.299 | 3.186 | 1.558 | 3.183 |
+| **anchored (default)** | 1.304 | 3.426 | **1.528** | **3.172** |
+| previous re-query | 199.551 | 197.892 | 278.246 | 1739.782 |
+
+Anchored windowing is **indistinguishable from not windowing at all**. The previous path is
+two orders of magnitude worse on all three populations, and 12.8% of its post-occlusion
+frames fall below the export gate — so the damage was partly self-concealing: an
+export-gated score would have shown holes rather than the scattered tracks causing them.
+
+`window_overlap` also moved **8 → 32**, as a separate change that only became visible once
+anchoring landed. Overlap frames are taken from the *earlier* window, where the track had a
+full run-up behind it, so the overlap is what a window start gets instead of context. On the
+261-frame plate at window 120: coverage 37.7% with the previous re-query, 56.2% anchored at
+overlap 8, **62.1% anchored at overlap 32** — against 62.6% for the same checkpoint run in
+one window at **twice the VRAM**. Overlap 60 bought 1.0 more point for 26% more time and is
+not the default.
+
+Reproduce, with `win=`/`ov=`/`anchor=` now part of an engine's label so two windowings can
+never share a row:
+
+```
+python tools/bench3.py --shot bench/synth/lab02_occ \
+    --engines "jefftrack,jefftrack/win=40;ov=8,jefftrack/win=40;ov=8;anchor=0"
+```
+
+Same lesson as the resolution bug, in a different place: **a bench whose clips are all
+shorter than the thing under test cannot test it.**
 
 **Model resolutions must be multiples of 8.** The ResNet strides down by 8; a side that is
 not a multiple emits `output size is not a multiple of 8. Final layer will round size

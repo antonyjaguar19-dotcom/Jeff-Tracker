@@ -303,6 +303,74 @@ clip length moves it.
 
 Same checkpoint in every row. Only `--model-res` moves.
 
+## Stage C — what training changed
+
+Four runs, each differing from its neighbour by exactly one setting, so a difference is
+attributable rather than a guess. 20,000 steps each.
+
+| run | mixer | occluded term | res | isolates |
+|---|---|---|---|---|
+| c1 | frozen | weight 0.2 | 256 | the schedule and batch |
+| c2 | **trainable** | weight 0.2 | 256 | unfreezing the temporal path |
+| c3 | trainable | **share 0.2** | 256 | the loss fix |
+| c4 | trainable | share 0.2 | **384** | the feature ladder |
+
+At 256×256, against the previous checkpoint, mean over the four benches:
+
+| | visible mean | visible worst | occluded | re-acquire |
+|---|---|---|---|---|
+| c1 schedule | −0.005 | +0.940 | +0.185 | +0.023 |
+| c2 + unfreeze | −0.015 | −7.646 | −0.599 | +0.005 |
+| **c3 + occ-share** | **−0.024** | **−8.638** | **−0.735** | **−0.013** |
+
+**Worst case 21.94 → 13.30 px (−39%). Occluded 4.36 → 3.62 px (−17%).**
+
+Three things it establishes:
+
+**The schedule was never the constraint.** c1 ran 5× the steps of the previous checkpoint
+with 4× the batch and a proper decay, and landed in the same place.
+
+**The temporal path was**, and this was predicted before the run. An earlier experiment
+found that quadrupling the number of neighbours the cross-track block can attend over moved
+nothing past the third decimal — so the block was short of *authority*, not information: the
+part that carries a point across an occlusion was frozen and had been trained to ignore
+occluded frames. Unfreezing it cut worst-case error 35%.
+
+**The feared trade did not happen.** Supervising occluded points was expected to cost
+re-acquisition, and an earlier 3,000-step A/B showed exactly that. c3 applies roughly
+fifteen times that supervision strength — the occluded term measured **1.40%** of the
+position loss before and **20.96%** after — and re-acquisition *improves*.
+
+### The generalisation check, and what it says about c4
+
+| DAVIS, strided | AJ | delta_avg | OA |
+|---|---|---|---|
+| previous @256 | 67.9 | 79.7 | 89.9 |
+| **c3 @256** | 68.0 | 79.4 | 89.8 |
+| previous @384 | 68.8 | 80.9 | **88.0** |
+| **c4 @384** | **69.3** | 80.5 | **90.5** |
+
+c3 is unchanged on DAVIS, so its bench gains are not overfitting to the training data. That
+is what the gate exists for.
+
+c4 is the best model measured here **and it repairs the occlusion-accuracy regression that
+running at 384 introduced** — 88.0 → 90.5, past even the 256 baseline. On the synthetic
+benches c4 looks like a trade (it buys a smaller worst case with worse occluded, visible and
+re-acquire); on real video it is the strongest. Both readings are reported because they
+disagree, and picking one would be choosing the benchmark after seeing the result.
+
+### Which checkpoint to use
+
+**No single one wins everything.**
+
+| you care about | use | on the Hub as |
+|---|---|---|
+| occluded accuracy | c3 | `jefftracker_occ.ckpt` |
+| occlusion calls / DAVIS | c4 | `jefftracker_occ_ladder384.ckpt` |
+| plain visible accuracy | the original | `inf_s4000.ckpt` |
+
+`inf_s4000.ckpt` remains the default so an existing pin keeps resolving to the same weights.
+
 ## Limits
 
 - Four synthetic benches from one source plate. Exact truth, but one scene and one motion

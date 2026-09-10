@@ -108,6 +108,19 @@ class JeffTrackEngine:
     Coordinates in:  queries are [frame, x, y] in the pixel space of the frames handed in.
     Coordinates out: tracks are [x, y] in that same pixel space, y DOWN (OpenCV raster).
                      The 3DE y-flip belongs to the exporter, not here.
+
+    Windowing is a VRAM measure, not part of the algorithm -- but the way a window is
+    re-queried decides whether a track keeps its IDENTITY across the seam, and getting that
+    wrong costs more than any other setting in this file. See track_queries_conf. Measured
+    on the occlusion bench at window 40, against ground truth, ungated:
+
+        no windowing        visible 1.299   occluded   3.186   re-acquire   1.558 px
+        anchored (default)  visible 1.304   occluded   3.426   re-acquire   1.528 px
+        previous re-query   visible 199.6   occluded 197.9     re-acquire 278.2  px
+
+    A clip short enough to fit one window never reaches that code, so those three rows are
+    one row on every bench in this repo -- which is why it went unmeasured until a
+    261-frame plate was rendered and watched.
     """
 
     def __init__(
@@ -119,8 +132,16 @@ class JeffTrackEngine:
         model_res: Tuple[int, int] = DEFAULT_MODEL_RES,
         query_chunk_size: int = 64,
         window: int = 0,
-        window_overlap: int = 8,
+        # Raised 8 -> 32 with the anchored re-query. The overlap frames are taken from the
+        # EARLIER window, where the track had a full run-up behind it, so the overlap is
+        # what a window start gets instead of context. Once anchoring stopped the seam
+        # destroying track identity, that context became the whole remaining gap: measured
+        # on a 261-frame plate at window 120, coverage 56.2% at overlap 8 and 62.1% at 32,
+        # against 62.6% for the same checkpoint in one window at twice the VRAM. Overlap 60
+        # bought 1.0 more point for 26% more time and is not the default.
+        window_overlap: int = 32,
         arch: str = "locotrack",
+        anchor_query: bool = True,
     ):
         if device == "cuda" and not torch.cuda.is_available():
             device = "cpu"
@@ -139,6 +160,10 @@ class JeffTrackEngine:
         # windowing here is purely a memory measure, not part of the algorithm.
         self.window = int(window)
         self.window_overlap = int(window_overlap)
+        # See track_queries_conf. Prepends the QUERY frame to every later window so each
+        # one still holds the appearance the track is defined by. Off reproduces the
+        # previous behaviour exactly, which is what an A/B between them needs.
+        self.anchor_query = bool(anchor_query)
         self.ckpt = ckpt or DEFAULT_CKPT
         if not os.path.isfile(self.ckpt):
             raise SystemExit("[ERROR] checkpoint not found: {}".format(self.ckpt))
@@ -238,24 +263,51 @@ class JeffTrackEngine:
                 if e >= T:
                     break
 
+        qframes = np.unique(q[:, 0].astype(int))   # usually just [0]
+
         filled = 0   # frames already written; a later window only writes past this
         for wi, (s, e) in enumerate(spans):
             block = frames_bgr[s:e]
+            n_anchor = 0
             if wi == 0:
                 qq = q.copy()
                 qq[:, 0] = np.clip(qq[:, 0] - s, 0, e - s - 1)
+            elif self.anchor_query:
+                # ANCHORED re-query. Prepend the frames the tracks were QUERIED on to this
+                # window's block, and query every track at its own original frame and
+                # original position, exactly as window 0 did.
+                #
+                # The alternative below -- re-querying at frame `s` on the position the
+                # previous window predicted there -- defines each track by whatever pixel
+                # it happened to be sitting on at the seam. That is fine while the track is
+                # healthy and destroys it when it is not: a point that is OCCLUDED at the
+                # seam is re-defined as the occluder, and no later frame can undo it,
+                # because the appearance the model matches against is now the wrong
+                # appearance. It cannot re-acquire something it no longer has a picture of.
+                #
+                # Measured on a 261-frame plate whose subject is fully hidden across the
+                # seam: the same checkpoint scores 34.9% coverage windowed and 62.6% in one
+                # window, and the difference is a cliff at the window boundary, not at the
+                # occlusion. On the occlusion bench with ground truth it is the difference
+                # between a 278 px mean re-acquisition error and a 1.53 px one.
+                #
+                # Cost is one extra frame of context per window. The prepended frame is
+                # temporally discontinuous with the rest of the block, so its own output is
+                # discarded -- it is there to be correlated against, not to be tracked.
+                anchors = [f for f in qframes if not (s <= f < e)]
+                n_anchor = len(anchors)
+                if n_anchor:
+                    block = np.concatenate([frames_bgr[anchors], block], axis=0)
+                local = {int(f): i for i, f in enumerate(anchors)}
+                qq = q.copy()
+                qq[:, 0] = [local[int(f)] if int(f) in local else int(f) - s + n_anchor
+                            for f in q[:, 0]]
             else:
-                # Re-query every track at this window's own first frame, using the
-                # position the PREVIOUS window predicted for that same frame. The frame
-                # index and the position must refer to the same instant; carrying the
-                # previous window's LAST position into local frame 0 instead is an
-                # `overlap`-frame mismatch that compounds at every seam. Measured on the
-                # selftest, that mistake cost 0.10 px -> 72 px.
-                # This is what the overlap is for: frame s lies inside the previous
-                # window, so it was tracked there with a full run of context behind it.
-                # Ids are preserved by construction: row i stays track i. A track that was
-                # occluded at the seam re-locks onto whatever sits at that pixel -- the
-                # cost of windowing, and the reason to keep windows as long as VRAM allows.
+                # Legacy path, kept so the change above can be measured against it.
+                # The frame index and the position must refer to the same instant;
+                # carrying the previous window's LAST position into local frame 0 instead
+                # is an `overlap`-frame mismatch that compounds at every seam. Measured on
+                # the selftest, that mistake cost 0.10 px -> 72 px.
                 qq = np.concatenate(
                     [np.zeros((N, 1), np.float32), tracks[s].astype(np.float32)], axis=1)
 
@@ -269,6 +321,8 @@ class JeffTrackEngine:
             tr[..., 0] *= sx
             tr[..., 1] *= sy
             cf = np.transpose(1.0 - occ_p, (1, 0))   # (T',N)
+            if n_anchor:                             # drop the prepended anchor frames
+                tr, cf = tr[n_anchor:], cf[n_anchor:]
 
             # The overlap belongs to the earlier window: there the point was tracked from
             # a real query with more context behind it. Only write frames not yet filled.

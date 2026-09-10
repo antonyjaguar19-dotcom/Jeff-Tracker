@@ -30,7 +30,13 @@ HF_REPO = os.environ.get("JEFFTRACK_HF_REPO", "JeffyAntony/Jeff-Tracker")
 LOCO_REPO = "hamacojr/LocoTrack-pytorch-weights"
 LOCO_TYPE = "dataset"
 
-JEFFTRACK_FILES = ["inf_s4000.ckpt"]
+# All three are on the Hub. `inf_s4000.ckpt` stays the default so an existing pin
+# keeps resolving to the same weights; the Stage C checkpoints are additive.
+# Which one to prefer depends on what you are measuring -- see docs/COMPARISON.md,
+# "Stage C". No single checkpoint wins every metric.
+JEFFTRACK_FILES = ["inf_s4000.ckpt",
+                   "jefftracker_occ.ckpt",           # best occluded accuracy
+                   "jefftracker_occ_ladder384.ckpt"] # best DAVIS / occlusion calls
 LOCO_FILES = ["locotrack_base.ckpt", "locotrack_small.ckpt"]
 
 

@@ -97,5 +97,61 @@
         "3025": 0.182
       }
     }
+  },
+  "stage_c_training": {
+    "note": "Four training runs, each one flag from its neighbour, 20,000 steps at accumulation 16 with a cosine decay. Scored on the same four synthetic occlusion benches with the same 600 seeds as every other number here.",
+    "what_each_run_isolated": {
+      "c1": "the schedule and batch alone -- frozen mixer, historical occluded weight",
+      "c2": "+ the vendor's temporal transformer made trainable",
+      "c3": "+ the occluded position term normalised to a stated 0.2 SHARE",
+      "c4": "+ trained at the higher feature ladder (384)"
+    },
+    "at_256x256_vs_shipping": {
+      "note": "mean over 4 benches, ungated, truth on plate. Negative is better.",
+      "c1_schedule": {
+        "vis_mean": -0.005,
+        "vis_max": 0.94,
+        "occ_mean": 0.185,
+        "reacquire": 0.023
+      },
+      "c2_unfreeze": {
+        "vis_mean": -0.015,
+        "vis_max": -7.646,
+        "occ_mean": -0.599,
+        "reacquire": 0.005
+      },
+      "c3_occ_share": {
+        "vis_mean": -0.024,
+        "vis_max": -8.638,
+        "occ_mean": -0.735,
+        "reacquire": -0.013
+      }
+    },
+    "headline": "worst-case visible error 21.94 -> 13.30 px (-39%), occluded 4.36 -> 3.62 px (-17%), and re-acquisition improved rather than being traded away.",
+    "davis_check": {
+      "note": "The generalisation gate. Stage C trained hard on MOVi-E, so the point of keeping a public benchmark in the loop is to catch a model that improved on the synthetic benches by overfitting to them.",
+      "c3_at_256": {
+        "AJ": 68.0,
+        "delta_avg": 79.4,
+        "OA": 89.8
+      },
+      "shipping_at_256": {
+        "AJ": 67.9,
+        "delta_avg": 79.7,
+        "OA": 89.9
+      },
+      "c4_at_384": {
+        "AJ": 69.3,
+        "delta_avg": 80.5,
+        "OA": 90.5
+      },
+      "shipping_at_384": {
+        "AJ": 68.8,
+        "delta_avg": 80.9,
+        "OA": 88.0
+      },
+      "reading": "c3 is unchanged on DAVIS, so its bench gains are not overfitting. c4 is the best model measured here and repairs the occlusion-accuracy regression that running at 384 introduced -- 88.0 -> 90.5, past the 256 baseline of 89.9."
+    },
+    "which_to_use": "No single checkpoint wins everything, and saying otherwise would mean choosing the metric after seeing the results. jefftracker_occ.ckpt (c3) for occluded accuracy; jefftracker_occ_ladder384.ckpt (c4) for occlusion classification and DAVIS; the original inf_s4000.ckpt is marginally best on plain visible accuracy at matched coverage."
   }
 }

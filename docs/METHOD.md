@@ -418,3 +418,191 @@ is the obvious next run.
 **Shipping checkpoint: `inf_s4000.ckpt`**, selected on the first bench and validated on
 three built afterwards. Picking the best of five checkpoints *using* occ11/12/13 would be
 selection on the test set, and no number here is obtained that way.
+
+## Closing the occlusion gap: four attempts, one kept
+
+CoTracker3's remaining advantage over this model is one column: accuracy **while a point is
+hidden**. At matched resolution Jeff-Tracker takes visible localisation and re-acquisition;
+occluded-frame error is the gap. Four changes were built against that, each one flag apart
+from its control, each trained for 20,000 steps on the same data under the same schedule,
+and each scored on five occlusion benches.
+
+Read the method here as much as the results: **the differences are 1-3%, and a single
+training run cannot tell a 1% difference from the draw.** Both arms of every comparison save
+intermediate checkpoints, so the spread between three late checkpoints *within* each arm
+bounds how much of a difference is wander. Where the two bands do not overlap, the effect is
+real; where they do, it is not established no matter which way the final checkpoints fell.
+That test reversed the reading on two of the four routes.
+
+### 1a. More neighbours for the cross-track block — no effect
+
+`query_chunk_size` bounds how many tracks the cross-track block can attend across. Raised on
+a trained checkpoint, with the temporal mixer unfrozen, on the standard occlusion bench:
+
+| query_chunk_size | occluded mean | peak VRAM | s/frame |
+|---|---|---|---|
+| 64 | 3.186 | 2.79 GB | 0.057 |
+| 256 | 3.185 | 5.52 GB | 0.037 |
+| 600 (every track in one chunk) | 3.184 | 11.29 GB | 0.362 |
+
+At 600 every track sees every other track in the shot. Nine times the neighbours moved the
+occluded mean by **0.002 px**. The block is not short of information.
+
+### 1b. Give the proxies a memory (`--carry-state`) — a wash
+
+The cross-track proxies were rebuilt from a static learned parameter for every frame
+independently, so they summarise the tracks *at that instant* and are discarded. A point
+hidden at frame *t* has an uninformative token at frame *t*, and a per-frame summary of its
+neighbours is built from that same frame — so the one thing that could place it, where the
+group has been heading, is exactly what a static proxy cannot hold. `--carry-state` puts the
+proxies through the temporal blocks between cross blocks so they accumulate that state.
+
+**It adds no parameters at all** — same count, same initialisation, only the information
+flow differs — which makes it the cleanest of the comparisons.
+
+Final checkpoints read as a modest win: occluded mean −1.8%, −3.9%, +0.9%, −2.1%, +1.2%
+across the five benches. The overlap test disagrees:
+
+| bench | control range | carry-state range | verdict |
+|---|---|---|---|
+| lab02_occ | 2.942–3.085 | 2.977–3.046 | overlap |
+| occ_s11 | 3.099–3.230 | **3.051–3.086** | better, separated |
+| occ_s12 | **4.135–4.201** | 4.218–4.287 | **worse, separated** |
+| occ_s13 | 3.885–3.992 | 3.868–3.926 | overlap |
+| lab02_depth | 2.101–2.165 | 2.120–2.172 | overlap |
+
+Better on one bench, worse on one, indistinguishable on three. Both separations are real, so
+this is a trade rather than a gain. Not on by default; the flag stays.
+
+One secondary effect did reproduce: checkpoint-to-checkpoint spread of the occluded mean
+fell to **55% of the control's**, tighter on four of five benches. It does not improve the
+level, but it lowers the noise floor a future result has to clear.
+
+Implementation note worth keeping. The proxies were first carried by appending them as extra
+rows to the real tracks' tensor. That is mathematically free — the temporal block attends
+over the frame axis within each row and never across rows — and it is not free in floating
+point: the extra rows change the batch size handed to `scaled_dot_product_attention`, which
+changes its kernel and reduction order. 1.9e-4 on the mixer output, amplified by the four
+refinement iterations into **0.51 px** on tracks, and `check_identity.py` failed. They now go
+through as a separate call on the same layer.
+
+### 2. L1 on the occluded population (`--occ-l1`) — KEPT
+
+The position loss used Huber for both populations. Huber is quadratic below `delta`, so an
+occluded point sitting 2–3 px out — exactly the band this model loses in — contributes
+`dist²/2` and is barely corrected. CoTracker3's recipe uses Huber on visible and plain L1 on
+invisible. Measured on the loss itself, occluded population:
+
+| true error | Huber | L1 | ratio |
+|---|---|---|---|
+| 0.5 px | 0.1250 | 0.2000 | **1.60x** |
+| 2.5 px | 3.1251 | 3.0000 | 0.96x |
+| 8.0 px | 24.0003 | 20.8003 | 0.87x |
+
+It reweights toward the moderate misses that make up the gap, away from the wild ones.
+
+| bench | visible | occluded mean | occluded med | re-acquire |
+|---|---|---|---|---|
+| lab02_occ | 1.299 → **1.280** | 3.186 → **3.040** | 2.827 → **2.653** | 1.558 → **1.537** |
+| occ_s11 | 1.364 → **1.346** | 3.206 → **3.180** | 2.783 → **2.703** | 1.623 → **1.604** |
+| occ_s12 | 1.412 → **1.393** | 4.189 → **4.180** | 3.468 → **3.421** | 1.960 → **1.939** |
+| occ_s13 | 1.388 → **1.368** | 3.902 → 3.959 | 3.335 → **3.293** | 1.793 → **1.771** |
+| lab02_depth | 1.192 → **1.168** | 2.314 → **2.120** | 2.038 → **1.822** | 1.307 → **1.287** |
+
+Visible, occluded median and re-acquisition improve on **five of five**; occluded mean on
+four of five. And the overlap test agrees — on lab02_occ, three late checkpoints per arm, the
+bands are disjoint on every metric, worst treatment beating best control:
+
+| | control | with `--occ-l1` |
+|---|---|---|
+| visible mean | 1.299–1.307 | **1.279–1.283** |
+| occluded mean | 3.103–3.333 | **2.942–3.085** |
+| occluded median | 2.725–2.957 | **2.560–2.710** |
+
+**Unexpected, and recorded as a hypothesis rather than a finding:** visible accuracy improved
+too, on every bench, though the change only touches occluded samples. Under the normalised
+objective the occluded population owns a fixed share of the position gradient, and Huber is
+linear past `delta` with no ceiling, so a few very large occluded errors were consuming that
+whole share and pulling on weights the visible objective also uses. L1 scales those down.
+Falsifiable: the effect should shrink as the occluded share goes to zero.
+
+### 3. A fourth correlation level (`--pyramid-level 1`) — REJECTED
+
+CoTracker3 runs four correlation levels; LocoTrack ships three. Token width 854 → 1110. The
+new channels enter the mixer at zero weight and the extra CMDTop trains with them.
+
+It fit the training data **best** of the three runs — final loss 1.9611 against 2.1811 and
+2.1991, about 10% better — and lost on the benches:
+
+| bench | control range | 4-level range | verdict |
+|---|---|---|---|
+| lab02_occ | **2.942–3.085** | 3.127–3.379 | **worse, separated** |
+| occ_s11 | 3.099–3.230 | 3.146–3.323 | overlap |
+| occ_s12 | **4.135–4.201** | 4.266–4.447 | **worse, separated** |
+| occ_s13 | 3.885–3.992 | 3.904–4.058 | overlap |
+| lab02_depth | **2.101–2.165** | 2.187–2.327 | **worse, separated** |
+
+Worse on three, indistinguishable on two, better on none — not a trade, there is no bench it
+wins. Checkpoint spread also averages **177% of the control's**, wider on all five, where
+`--carry-state` halved it. It costs 4.3 GB against 3.0 in training and the extra level is
+paid on every frame at inference.
+
+Third time this model has rejected the same idea: a run at the higher feature ladder was
+rejected earlier, `384x680` produced confident 1000 px errors, and now a fourth level.
+Working conclusion: **on this architecture, additional correlation capacity is absorbed as a
+better fit to the training distribution and does not reach the benches.** Worth re-testing
+with real pseudo-labelled data behind it, since CoTracker3 runs four levels *and* a second
+stage over 15,000 videos.
+
+### What the four together establish
+
+| route | change | parameters added | verdict |
+|---|---|---|---|
+| 1a | more neighbours per chunk | 0 | no effect |
+| 1b | proxies carry temporal state | 0 | wash |
+| 2 | L1 on the occluded population | 0 | **kept** |
+| 3 | fourth correlation level | 266,752 | **rejected** |
+
+The change that worked changed the **objective**. Both architecture changes did nothing, and
+the one that added capacity hurt. Against CoTracker3's 1.69–1.99 occluded on the card benches
+and 1.708 on the depth bench, this model sits at 3.040 and 2.120 — routes 1b and 3 moved that
+by nothing.
+
+Stated plainly because it is the most useful thing these runs produced: **the remaining gap
+is not going to be closed by another flag on this architecture.** What is still structurally
+different is that CoTracker3's joint attention lives inside its own space-time block stack
+over all 384–768 points at once, where this model's is a zero-initialised residual bolted
+around a refinement mixer that is per-track by construction. That is a refinement-network
+rewrite, not a setting.
+
+### Two pieces of measurement apparatus built alongside
+
+**Occluders with real depth** (`tools/make_occlusion_bench.py --depth`). The existing
+occluders were axis-aligned rectangles sliding across the frame at constant velocity — a card
+slid over a photo, whose edge carries no parallax and behind which nothing ever passes. The
+depth mode puts convex silhouettes on a plane at a different depth under the same camera
+motion: each vertex is the background's own homography displacement scaled by the depth
+ratio, so the background genuinely parallaxes past the occluding edge. Exactness survives —
+every vertex is arithmetic on the bench's known homography — and the scorer gained a convex
+point-in-polygon test. Control passes at 0.00000 px.
+
+It was built expecting flat cards to have been flattering the model. They were not: depth
+occluders are *easier* for this model (3.186 → 2.314) and unchanged for CoTracker3 (1.693 →
+1.708). The gap narrows from 1.88x to 1.35x and does not close, on a bench built to be fairer
+to it — which is the strongest evidence available that the occluded gap is a property of the
+model rather than of the occluder geometry.
+
+**Pseudo-labelling on real plates** (`tools/make_pseudo_labels.py`, `tools/train_stage2.py`).
+The second half of CoTracker3's recipe, with commercially-clean teachers. One teacher per
+sample drawn at random rather than averaged; support points tracked jointly and discarded;
+queries from a detector rather than a grid, with a frame that cannot supply them dropped
+instead of padded; teacher visibility hardened at 0.9; labels gated by forward-backward
+closure measured from each track's own last confident frame. The visibility and confidence
+losses are deliberately **absent** from stage 2, following the recipe — a teacher's
+visibility is its opinion about its own reliability, and this model's confidence head is a
+signal worth more than a stage-2 number.
+
+Stated in its own docstring: it will not close the occlusion gap. Its occluded term is
+weighted 0.01 against 0.05 visible, teachers are least reliable exactly where a point is
+hidden, and the closure gate drops the hidden stretches it cannot verify. It buys
+generalisation to real footage. The pipeline runs end to end; no trained result from it yet.

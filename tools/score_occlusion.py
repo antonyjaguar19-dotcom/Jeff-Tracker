@@ -1,8 +1,8 @@
 """Score a 3DE export on an occlusion bench: visible vs occluded, and re-acquisition.
 
-Three numbers, kept apart on purpose. Visible and occluded accuracy move independently
-under cross-track attention -- the occluded term is the one that shifts -- so an average
-across both shows a modest gain and hides the entire effect.
+Three numbers, kept apart on purpose. CoTracker3's own ablation for cross-track attention
+reports visible and occluded separately (71.3 -> 72.9 visible, 35.9 -> 41.0 occluded); an
+average across both would have shown a modest gain and hidden the entire effect.
 
   VISIBLE     mean error on frames where ground truth says the point was in clear view.
               This is the localisation number, and it must not get worse.
@@ -15,10 +15,9 @@ across both shows a modest gain and hides the entire effect.
               lands back on the right pixel is usable, and one that comes back onto the
               neighbouring feature is worse than a gap, because it looks fine.
 
-    python score_occlusion.py --control
-    python score_occlusion.py --shot bench/synth/lab02_occ --npz out/run.npz
-    python score_occlusion.py ^
-        --shot bench\\synth\\lab02_occ --bot out\\lab02_occ__jefftrack.txt
+    python tools/score_occlusion.py --control
+    python tools/score_occlusion.py \
+        --shot bench\\synth\\lab02_occ --bot out/lab02_occ__jefftrack.txt
 
 --control feeds the scorer ground truth as if it were a tracker's export. Every error must
 come back ~0. Both metric defects found in 2026-08 were metrics that looked plausible and
@@ -33,9 +32,8 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)          # the repo root, one level up
-REPO = ROOT
-for _p in (ROOT, HERE):
+REPO = os.path.dirname(HERE)          # the repo root, one level up
+for _p in (HERE, REPO):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
@@ -69,6 +67,20 @@ def is_occluded(occ: dict, t: int, pts: np.ndarray) -> np.ndarray:
     if occ is None:
         return hit
     for o in occ["occluders"]:
+        if "polys" in o:
+            # Depth occluders carry a convex silhouette per frame instead of a box. Convex,
+            # so a point is inside exactly when it is on the same side of every edge; the
+            # sign of the whole polygon is taken from its own winding rather than assumed,
+            # because the vertices are warped per frame and can change orientation.
+            poly = o["polys"][t]
+            if poly is None:
+                continue
+            v = np.asarray(poly, float)
+            e = np.roll(v, -1, axis=0) - v
+            d = pts[:, None, :] - v[None, :, :]
+            cross = e[None, :, 0] * d[:, :, 1] - e[None, :, 1] * d[:, :, 0]
+            hit |= (cross >= 0).all(1) | (cross <= 0).all(1)
+            continue
         b = o["boxes"][t]
         if b is None:
             continue
@@ -303,7 +315,7 @@ def main() -> int:
 
     shot = a.shot or os.path.join(REPO, "bench", "synth", "lab02_occ")
     if a.control:
-        tmp = os.path.join(ROOT, "out", "_control_gt.txt")
+        tmp = os.path.join(HERE, "out", "_control_gt.txt")
         os.makedirs(os.path.dirname(tmp), exist_ok=True)
         write_control_export(shot, tmp, 40, a.first_frame)
         gt, Hs, _ = load_shot(shot)

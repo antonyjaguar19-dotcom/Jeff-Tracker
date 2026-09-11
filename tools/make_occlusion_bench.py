@@ -2,7 +2,7 @@
 
 bench/README.md is explicit that the synthetic bench does NOT measure occlusion: "one
 plane, nothing moves relative to anything else". That is the one thing this whole
-experiment is about -- cross-track attention is the component with the
+experiment is about -- cross-track attention is the CoTracker3 component with the
 occluded-point number attached to it (paper Table 3: occluded 35.9 -> 41.0, visible only
 71.3 -> 72.9), so a bench that cannot see occlusion cannot decide whether to build it.
 
@@ -16,7 +16,7 @@ Occluders are textured, not flat: a solid black box is easier to survive than a 
 because a tracker with any photometric check simply fails to match and coasts. Real
 occluders in a plate carry detail, and detail is what pulls a tracker off its feature.
 
-    python make_occlusion_bench.py ^
+    python tools/make_occlusion_bench.py \
         --src bench\\synth\\lab02 --out bench\\synth\\lab02_occ
 """
 from __future__ import annotations
@@ -79,12 +79,127 @@ def build_occluders(W: int, H: int, T: int, n: int, seed: int):
     return occ
 
 
+def _apply_h(H, pts):
+    """Map (N,2) points through a 3x3 homography."""
+    p = np.concatenate([pts, np.ones((len(pts), 1))], 1) @ np.asarray(H, float).T
+    return p[:, :2] / p[:, 2:3]
+
+
+def build_depth_occluders(W, H, T, n, seed, Hs, depth=2.2):
+    """Occluders on a plane at a DIFFERENT DEPTH, under the same camera motion.
+
+    What the box occluders above cannot test. They translate across the frame on a straight
+    line at constant speed, which is a card slid over a photo: the occluder's motion is
+    unrelated to the camera's, so its edge carries no parallax and nothing ever goes
+    *behind* anything. Real occlusion in a plate is a depth discontinuity -- the background
+    slides past the foreground because they are at different distances, and the edge where
+    they meet is the hardest place in the shot for a tracker precisely because the pixels on
+    either side of it are moving differently.
+
+    Here each occluder is a convex polygon on its own fronto-parallel plane. The background
+    plane's induced displacement for frame t is known exactly -- it is the bench's own
+    homography `Hs[t]` -- so a plane at `depth` times the disparity moves by that
+    displacement scaled, which is the first-order parallax relation for a translating
+    camera. `depth > 1` puts the occluder NEARER than the background, which is the case that
+    matters: a foreground object sweeping past a background the camera is tracking.
+
+    Exactness is preserved, which is the whole reason the bench is worth having. Every
+    vertex is arithmetic on `Hs[t]`, so the silhouette is known per frame and the scorer can
+    label a (track, frame) sample occluded from geometry rather than from the tracker's
+    opinion.
+    """
+    rng = np.random.default_rng(seed)
+    occ = []
+    for i in range(n):
+        # An irregular convex silhouette, not a rectangle: a straight vertical edge is an
+        # unrealistically easy thing to survive, because the frames where a track is
+        # half-covered are the ones that pull it off its feature and a box makes those
+        # frames identical for every track it crosses.
+        # Elongated ACROSS the direction of travel, like the box occluders: a compact blob
+        # sweeping past covers each track for two or three frames, which is not an occlusion
+        # so much as a flicker. The box bench gets 6898 occluded samples out of 100 frames
+        # and a silhouette has to be sized to match, or the two benches are not comparable
+        # and this one has no statistical power at all.
+        vertical = (i % 2 == 1)
+        k = int(rng.integers(5, 8))
+        rad = rng.uniform(0.16, 0.28) * min(W, H)
+        ang = np.sort(rng.uniform(0, 2 * np.pi, k))
+        r = rad * rng.uniform(0.70, 1.30, k)
+        long_ax = rng.uniform(2.2, 4.0)
+        sx, sy = (long_ax, 1.0) if vertical else (1.0, long_ax)
+        base = np.stack([np.cos(ang) * r * sx, np.sin(ang) * r * sy], 1)
+
+        # Start off-frame, cross, end off-frame, so every track it meets sees a clean
+        # enter and exit rather than an occluder that is simply present all shot.
+        pad = rad * long_ax * 1.6
+        if vertical:
+            cx = rng.uniform(0.15, 0.85) * W
+            p0 = np.array([cx, -pad])
+            p1 = np.array([cx, H + pad])
+        else:
+            cy = rng.uniform(0.15, 0.85) * H
+            p0 = np.array([-pad, cy])
+            p1 = np.array([W + pad, cy])
+        if rng.random() < 0.5:
+            p0, p1 = p1, p0
+        lead = rng.uniform(0.0, 0.35)
+        span = rng.uniform(0.45, 0.65)
+
+        tex = rng.integers(0, 255, (24, 24, 3), dtype=np.uint8)
+        tex = cv2.GaussianBlur(
+            cv2.resize(tex, (max(16, int(rad)), max(16, int(rad))),
+                       interpolation=cv2.INTER_LINEAR), (5, 5), 0)
+
+        polys = []
+        for t in range(T):
+            u = (t / max(1, T - 1) - lead) / span
+            if u < 0.0 or u > 1.0:
+                polys.append(None)
+                continue
+            centre = p0 + (p1 - p0) * u              # the occluder's own object motion
+            verts = base + centre
+            # ...plus the camera's effect on a plane at this depth: the background's own
+            # displacement for these pixels, scaled by the depth ratio.
+            moved = _apply_h(Hs[t], verts)
+            verts = verts + depth * (moved - verts)
+            polys.append([[float(x), float(y)] for x, y in verts])
+        occ.append({"id": i, "depth": float(depth), "polys": polys, "_tex": tex,
+                    "_rad": float(rad)})
+    return occ
+
+
+def draw_poly_occluder(img, o, t):
+    """Composite one polygonal occluder onto frame t. Returns pixels covered."""
+    poly = o["polys"][t]
+    if poly is None:
+        return 0
+    pts = np.array(poly, np.float32)
+    mask = np.zeros(img.shape[:2], np.uint8)
+    cv2.fillConvexPoly(mask, cv2.convexHull(np.int32(np.round(pts))), 255)
+    tex, (h, w) = o["_tex"], img.shape[:2]
+    tiled = np.tile(tex, (h // tex.shape[0] + 1, w // tex.shape[1] + 1, 1))[:h, :w]
+    # Shift the texture with the occluder so it reads as one moving object rather than a
+    # window onto a static pattern -- a static texture inside a moving hole is a cue no real
+    # occluder gives, and a tracker can exploit it.
+    c = pts.mean(0)
+    M = np.float32([[1, 0, c[0] % tex.shape[1]], [0, 1, c[1] % tex.shape[0]]])
+    tiled = cv2.warpAffine(tiled, M, (w, h), borderMode=cv2.BORDER_WRAP)
+    img[mask > 0] = tiled[mask > 0]
+    return int((mask > 0).sum())
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="add occluders to a bench/synth shot")
     ap.add_argument("--src", required=True, help="source bench shot (needs gt.json, plate/)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--occluders", type=int, default=4)
     ap.add_argument("--seed", type=int, default=7)
+    ap.add_argument("--depth", type=float, default=0.0,
+                    help="build occluders on a plane at this depth ratio relative to the "
+                         "background instead of sliding axis-aligned boxes. >1 puts them "
+                         "NEARER the camera, so the background parallaxes past their edge "
+                         "-- the thing a pasted card cannot test. 0 keeps the box "
+                         "occluders, so every existing bench reproduces exactly.")
     a = ap.parse_args()
 
     gt_path = os.path.join(a.src, "gt.json")
@@ -97,12 +212,26 @@ def main() -> int:
         raise SystemExit("[ERROR] no frames in {}/plate".format(a.src))
 
     W, H, T = int(gt["width"]), int(gt["height"]), len(files)
-    occ = build_occluders(W, H, T, a.occluders, a.seed)
+    depth_mode = a.depth > 0.0
+    if depth_mode:
+        Hs = gt.get("H")
+        if not Hs or len(Hs) < T:
+            raise SystemExit(
+                "[ERROR] --depth needs the per-frame homography in gt.json ('H'); "
+                "{} has {}".format(gt_path, "none" if not Hs else len(Hs)))
+        occ = build_depth_occluders(W, H, T, a.occluders, a.seed, Hs, a.depth)
+    else:
+        occ = build_occluders(W, H, T, a.occluders, a.seed)
 
     os.makedirs(os.path.join(a.out, "plate"), exist_ok=True)
     covered = 0
     for t, f in enumerate(files):
         img = cv2.imread(f, cv2.IMREAD_COLOR)
+        if depth_mode:
+            for o in occ:
+                covered += draw_poly_occluder(img, o, t)
+            cv2.imwrite(os.path.join(a.out, "plate", os.path.basename(f)), img)
+            continue
         for o in occ:
             b = o["boxes"][t]
             if b is None:
@@ -125,8 +254,9 @@ def main() -> int:
                    "occluders": [{k: v for k, v in o.items() if k != "_tex"}
                                  for o in occ]}, fh)
 
-    print("[out] {}  {} frames  {} occluders  mean cover {:.1f}% of frame".format(
-        a.out, T, len(occ), 100.0 * covered / float(T * W * H)))
+    print("[out] {}  {} frames  {} {} occluders  mean cover {:.1f}% of frame".format(
+        a.out, T, len(occ), "depth-{:g}".format(a.depth) if depth_mode else "box",
+        100.0 * covered / float(T * W * H)))
     return 0
 
 

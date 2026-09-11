@@ -1,0 +1,35 @@
+# Four attempts at the occlusion gap. One kept.
+
+The gap is one column: accuracy while a point is HIDDEN. Visible
+localisation and re-acquisition are already ours at matched resolution.
+
+1a  more neighbours          0 params   NO EFFECT
+    query_chunk_size 64 -> 600, where every track sees every other track
+    in the shot. Occluded mean 3.186 -> 3.184. Nine times the
+    information, 0.002 px. The block is not short of neighbours.
+
+1b  proxies with a memory    0 params   A WASH
+    Better on occ_s11, WORSE on occ_s12, indistinguishable on three.
+    Both separations real. A trade, not a gain. Final checkpoints alone
+    read as a win on three of five -- the overlap test is what caught it.
+    Secondary and real: checkpoint spread fell to 55% of the control's.
+
+2   L1 on occluded           0 params   KEPT
+    Huber is quadratic below delta, so a hidden point 2-3 px out -- the
+    band the gap lives in -- was barely corrected. Visible, occluded
+    median and re-acquisition improve on FIVE of five. Overlap test:
+    bands disjoint on every metric, worst treatment beats best control.
+    Unexpected: visible improved too, and an occluded-only change should
+    not do that. Hypothesis on record with a falsifiable prediction.
+
+3   fourth correlation level 266,752    REJECTED
+    Fit the training data BEST of the three runs, ~10% better loss, and
+    lost on the benches. Worse and separated on three, better on none.
+    Spread 177% of the control. Third rejection of this idea.
+
+~ The change that worked changed the OBJECTIVE. Both architecture
+~ changes did nothing and the one that added capacity hurt. Occluded
+~ sits at 3.040 / 2.120 against CoTracker3's 1.69-1.99 / 1.708.
+~ The remaining gap will not close with another flag on this
+~ architecture -- its joint attention lives inside a space-time stack
+~ over all points, ours is a residual around a per-track mixer.

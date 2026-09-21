@@ -1,0 +1,32 @@
+# Run 2, 48-frame windows -- REJECTED, and it settles the question
+
+Run 1's recipe with --clip-len 48, nothing else changed.
+
+The hypothesis was the reason this dataset was picked: MOVi-E clips
+are 24 frames so a longer occlusion cannot exist in them, 18.5% of
+the events here run past 24, show the model the long ones and it
+learns to cross them.
+
+Overlap test vs run 1: better 1, worse 6, overlap 13. It LOST.
+vs the pre-Kubric model: better 10, worse 2, overlap 8 -- still
+ahead of baseline, but strictly behind run 1.
+
+The coverage number is the real finding. Willingness to commit a
+position while hidden: 3.7% at 24 frames, 3.6% at 48. Doubling the
+context changed it by NOTHING. The model is not failing to compute
+a hidden position -- it is declining to emit one, and context is not
+what that decision turns on.
+
+Five mechanisms now built, trained and measured against this gap:
+more neighbours, neighbours with memory, a fourth correlation level,
+better data, longer windows. Three architectural, two about what it
+is fed. The occluded column has moved for none of them.
+
+SHIPS: run 1 (c8_kubric). visible and re-acquire separated better on
+5 of 5 benches, ~3% and ~4.5%.
+REJECTED: run 2. Buys nothing, costs 50% more per step.
+
+~ Untried, and the only thing all five attempts left alone: the
+~ per-track refinement structure itself, where a hidden point's
+~ position is computed without the model ever being REQUIRED to
+~ produce one. Different experiment from any of the five.

@@ -169,6 +169,30 @@ position loss on occluded frames, so it cannot teach a model to cross an occlusi
 attention you add; `0.2` weights an occluded point at one fifth of a visible one.
 ~2 s/step at 2.3 GB on an RTX A4000.
 
+### Training on Meta's Kubric release
+
+`--data-source kubric_meta` trains on [`facebook/CoTracker3_Kubric`](https://huggingface.co/datasets/facebook/CoTracker3_Kubric)
+instead of MOVi-E — 120-frame shots at 512×512, **Apache-2.0**, so it is usable here even
+though CoTracker3's own weights are not.
+
+```bash
+hf download facebook/CoTracker3_Kubric --repo-type dataset \
+    --local-dir datasets/CoTracker3_Kubric
+python tools/convert_kubric.py --selftest    # no dataset needed, runs in seconds
+python tools/convert_kubric.py               # 585 GB -> ~41 GB, ~4 s per shot
+python tools/train_cross.py --data-source kubric_meta --steps 20000 --accum 16 \
+    --occ-norm --occ-l1 --unfreeze-mixer --out weights/c8_kubric.ckpt
+```
+
+Measured, and it is a **trade rather than an upgrade**: visible accuracy ~3% tighter and
+re-acquisition ~4.5% better, separated on 5 of 5 occlusion benches, against about a point of
+AJ lost on TAP-Vid DAVIS and **no movement at all** on accuracy while a point is hidden.
+Full numbers, the three traps in that dataset, and why the occlusion column did not move:
+[KUBRIC_DATA.md](docs/KUBRIC_DATA.md).
+
+`python tools/train_monitor.py` serves a live progress / GPU / CPU dashboard on
+<http://localhost:8099> while a run is going.
+
 ## Layout
 
 ```
@@ -176,6 +200,7 @@ jefftrack/ engine.py  io.py  losses.py  model/  data/
 tools/     run, train, benchmark, demos, control passes
 docs/      METHOD.md (measurements)  BENCHMARK.md (protocol)
            COMPARISON.md (vs CoTracker3 & TAPNext++)  LICENSES.md (provenance)
+           KUBRIC_DATA.md (training on Meta's Kubric release)  verdicts/
 assets/    README media
 vendor/    LocoTrack, vendored
 ```

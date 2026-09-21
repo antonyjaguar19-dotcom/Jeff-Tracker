@@ -1,0 +1,34 @@
+# Run 1 on Meta's Kubric -- KEEP, but not for the reason it was run
+
+c5_occl1's recipe with one change: --data-source kubric_meta.
+Clip length held at 24 frames so the DATA is the only variable.
+Both arms re-measured in one session, 3 late checkpoints each.
+
+Overlap test, 20 comparisons: 12 separated better, 2 separated
+worse, 6 overlap.
+
+CLEAN SWEEPS, every checkpoint beating every control checkpoint
+on all five benches:
+  visible    ~3% tighter
+  re-acquire ~4.5% better   <- the column PLAN.md protects hardest
+
+NOT MOVED: occluded accuracy. Separated better on one bench,
+separated WORSE on lab02_depth (2.10-2.17 -> 2.22-2.23), overlap
+on three. lab02_depth is the fairest bench, so that regression is
+the one that counts.
+
+The mechanism is the opposite of the intent. Coverage at the 0.5
+gate FELL from ~5.5% to ~3.7%: the model now withholds a third of
+the hidden-frame positions it used to emit. More cautious, not
+more capable. That explains everything -- fewer committed guesses
+give tighter tracks and better re-acquisition and zero progress
+through an occlusion -- and it predicts the depth regression, the
+one bench where coverage did not fall.
+
+Against CoTracker3: 1.69 cards / 1.708 depth. We were 3.04/2.12,
+we are now 2.90/2.22. Gap unchanged.
+
+~ The property this dataset was CHOSEN for is still untested. 18.5%
+~ of its occlusion events run past 24 frames and a 24-frame window
+~ cannot contain one. Run 2 (c9_clip48) is that test; run 1 is its
+~ control.

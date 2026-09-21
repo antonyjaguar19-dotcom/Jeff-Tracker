@@ -58,6 +58,28 @@ def main() -> int:
     ap.add_argument("--model-size", default="base", choices=["small", "base"])
     ap.add_argument("--data-dir", default="gs://kubric-public/tfds")
     ap.add_argument("--dataset", default="movi_e/256x256")
+    # Meta's CoTracker3_Kubric (Apache-2.0) against the MOVi-E the earlier runs used. The
+    # reason to offer it is occlusion LENGTH, not volume: MOVi-E clips are 24 frames, so an
+    # occlusion lasting longer than that cannot exist in them, while 18.5% of the events in
+    # that data run past 24 frames. Build the cache with tools/convert_kubric.py.
+    #
+    # Measured, and worth knowing before using it: swapping the data improved visible
+    # accuracy ~3% and re-acquisition ~4.5%, separated on 5 of 5 occlusion benches, and moved
+    # accuracy WHILE HIDDEN by nothing. It also costs about a point of AJ on TAP-Vid DAVIS.
+    # See docs/verdicts/kubric_run1.txt.
+    ap.add_argument("--data-source", default="movi", choices=["movi", "kubric_meta"],
+                    help="which dataset to train on")
+    ap.add_argument("--cache-dir", default=None,
+                    help="kubric_meta cache dir (default: <repo>/datasets/kubric_cache, "
+                         "or $JEFFTRACK_KUBRIC_CACHE)")
+    ap.add_argument("--clip-len", type=int, default=24,
+                    help="frames per training sample on the kubric_meta path. The shots are "
+                         "120 frames; 24 matches what the MOVi-E runs saw. Raising it to 48 "
+                         "was measured and did NOT help -- see docs/verdicts/kubric_run2.txt")
+    ap.add_argument("--holdout", type=int, default=32,
+                    help="shots kept out of training entirely, so there is an "
+                         "in-distribution validation set no checkpoint was picked on")
+    ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--split", default="train")
     ap.add_argument("--steps", type=int, default=20000)
     ap.add_argument("--accum", type=int, default=4, help="gradient accumulation steps")
@@ -199,11 +221,21 @@ def main() -> int:
     # Imported here, not at module scope: tensorflow is a heavy import that only the
     # training path needs, and a missing pydeps install should fail with the message in
     # movi._import_tf rather than at the top of this file.
-    from jefftrack.data.movi import batches  # noqa: E402
-
-    print("[data] {} {} from {}".format(a.dataset, a.split, a.data_dir))
-    stream = batches(device=device, data_dir=a.data_dir, name=a.dataset, split=a.split,
-                     train_size=(a.res, a.res), batch_size=1, tracks_to_sample=a.tracks)
+    if a.data_source == "kubric_meta":
+        from jefftrack.data.kubric_meta import DEFAULT_CACHE, batches  # noqa: E402
+        a.cache_dir = a.cache_dir or DEFAULT_CACHE
+        print("[data] Meta CoTracker3_Kubric cache: {}".format(a.cache_dir))
+        print("       clip {} frames, {} tracks, {}x{}, holdout {} shots"
+              .format(a.clip_len, a.tracks, a.res, a.res, a.holdout))
+        stream = batches(device=device, cache_dir=a.cache_dir, batch_size=1,
+                         tracks_to_sample=a.tracks, clip_len=a.clip_len,
+                         train_size=(a.res, a.res), holdout=a.holdout, seed=a.seed)
+    else:
+        from jefftrack.data.movi import batches  # noqa: E402
+        print("[data] {} {} from {}".format(a.dataset, a.split, a.data_dir))
+        stream = batches(device=device, data_dir=a.data_dir, name=a.dataset,
+                         split=a.split, train_size=(a.res, a.res), batch_size=1,
+                         tracks_to_sample=a.tracks)
 
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
     cfg = {"model_size": a.model_size, "num_proxies": a.num_proxies,
@@ -211,6 +243,10 @@ def main() -> int:
            "carry_state": a.carry_state, "pyramid_level": a.pyramid_level,
            "base_ckpt": os.path.basename(a.base_ckpt), "res": a.res,
            "tracks": a.tracks, "dataset": a.dataset, "data_dir": a.data_dir,
+           # The data a run saw travels with its weights, for the same reason the
+           # architecture does: a checkpoint scored months later must be attributable to
+           # the dataset it was trained on, not to whatever the flag defaulted to since.
+           "data_source": a.data_source, "clip_len": a.clip_len, "holdout": a.holdout,
            "occ_pos_weight": a.occ_pos_weight, "occ_norm": bool(a.occ_norm),
            "occ_l1": bool(a.occ_l1),
            "unfreeze_mixer": bool(a.unfreeze_mixer), "lr_decay": a.lr_decay,

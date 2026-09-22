@@ -184,10 +184,13 @@ python tools/train_cross.py --data-source kubric_meta --steps 20000 --accum 16 \
     --occ-norm --occ-l1 --unfreeze-mixer --out weights/c8_kubric.ckpt
 ```
 
-Measured, and it is a **trade rather than an upgrade**: visible accuracy ~3% tighter and
-re-acquisition ~4.5% better, separated on 5 of 5 occlusion benches, against about a point of
-AJ lost on TAP-Vid DAVIS and **no movement at all** on accuracy while a point is hidden.
-Full numbers, the three traps in that dataset, and why the occlusion column did not move:
+Measured, and **it does not ship**: it wins on the synthetic occlusion benches (visible ~3%
+tighter, re-acquisition ~4.5%, separated on 5 of 5) and loses on every real-footage test —
+about a point of AJ on TAP-Vid DAVIS, fewer frames committed to on a real 4K plate, and a
+worse closure on a hand-referenced plate. All five of those benches derive from **one**
+synthetic shot, which is why they were able to outvote the real footage for a day.
+`c5_occl1` remains the recommended checkpoint. Full numbers, the three traps in that
+dataset, and why the occlusion column never moved:
 [KUBRIC_DATA.md](docs/KUBRIC_DATA.md).
 
 `python tools/train_monitor.py` serves a live progress / GPU / CPU dashboard on

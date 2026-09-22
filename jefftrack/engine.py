@@ -220,14 +220,46 @@ class JeffTrackEngine:
         occ_prob = 1.0 - (1.0 - occ) * (1.0 - unc)
         return tracks.float().cpu().numpy(), occ_prob.float().cpu().numpy()
 
+    # Measured with measure_window.py, one process per point so a spilled run cannot make
+    # the next reading look good. Peak RESERVED (what actually occupies the card, not
+    # max_memory_allocated, which reads ~30% lower and would over-promise):
+    #
+    #   256x256   250f  8.35 GB   312f 10.03   400f 14.13   500f 16.84   600f 20.93
+    #   384x512   120f 13.28 GB   200f 22.07   300f 37.96
+    #
+    # Linear in frames and, measured directly, INDEPENDENT of track count -- 400 frames is
+    # 14.13 GB at 400 tracks and 14.14 GB at 800. Per pixel of model_res per frame that is
+    # 4.96e-7 GB at 256x256 and 5.59e-7 at 384x512, so one coefficient covers both; the
+    # larger is used.
+    _GB_PER_PX_FRAME = 5.6e-7
+
     def _auto_window(self, T: int) -> int:
+        """Longest window that stays inside the card's FREE memory.
+
+        The old fixed budgets (250 / 120 / 64) were headroom guesses. 120 at 384x512 turned
+        out to be right, but 250 at 256x256 was out by 50% -- 382 frames fit -- and a shot
+        longer than the budget pays a real price at the seam: on SH006 (312 frames) the
+        default split cost more than half the tracks over the last quarter of the shot, for
+        0.26 GB.
+
+        Reading free VRAM rather than hardcoding also means this does the right thing on a
+        card that is not a 16 GB A4000, and on one that is already holding something else.
+
+        Overshooting does NOT raise OutOfMemory on Windows -- WDDM spills to host memory and
+        the run silently gets slower, measured 0.030 -> 0.55 s/frame, an 18x slowdown with
+        no error at all. A wrong budget is therefore invisible, which is the reason to
+        derive it from a measurement instead of a guess.
+        """
         if self.window > 0:
             return self.window
-        # Cost scales with T times the feature-grid area. Headroom figures for a 16 GB
-        # A4000; a caller that proves these wrong on a plate passes window=N explicitly.
         px = self.model_res[0] * self.model_res[1]
-        budget = 250 if px <= 256 * 256 else 120 if px <= 384 * 512 else 64
-        return min(T, budget)
+        per_frame = self._GB_PER_PX_FRAME * px
+        try:
+            free_b, _total = torch.cuda.mem_get_info()
+            usable = (free_b / 1e9) * 0.80        # leave a fifth for fragmentation
+        except Exception:
+            usable = 11.0                          # a 16 GB card with the desktop on it
+        return min(T, max(60, int(usable / per_frame)))
 
     # ------------------------------------------------------------------ public surface
     def track_queries_conf(self, frames_bgr, queries, fp16: bool = False):
@@ -264,6 +296,22 @@ class JeffTrackEngine:
                     break
 
         qframes = np.unique(q[:, 0].astype(int))   # usually just [0]
+
+        if len(spans) > 1:
+            # Say so, loudly. A seam is not a neutral implementation detail: every later
+            # window re-finds each track from its appearance on the QUERY frame, which over
+            # hundreds of frames is one enormous jump with no intermediate context, and the
+            # model answers honestly that it is unsure. On SH006 the track count fell 166 ->
+            # 59 at the seam and never recovered, which reads as a broken shot rather than
+            # as a setting. Whoever is looking at the result should know the frame number to
+            # be suspicious of, and that one flag removes it.
+            seams = ", ".join(str(s + 1) for s, _ in spans[1:])
+            print("[jefftrack] WARNING: {} frames split into {} windows of {}; expect a "
+                  "drop in tracked points at frame {}.".format(
+                      T, len(spans), win, seams))
+            print("[jefftrack]          Pass window={} to run it whole "
+                  "(~{:.1f} GB) if the card has room.".format(
+                      T, self._GB_PER_PX_FRAME * self.model_res[0] * self.model_res[1] * T))
 
         filled = 0   # frames already written; a later window only writes past this
         for wi, (s, e) in enumerate(spans):

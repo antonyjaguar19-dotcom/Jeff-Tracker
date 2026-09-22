@@ -76,12 +76,47 @@ def track_colors(n: int):
     return [tuple(int(c) for c in row) for row in bgr]
 
 
-def draw_overlay(frame_bgr, tracks, vis, t, colors, tail=12):
-    """Points at frame t with a short tail. Occluded points are drawn hollow rather than
-    dropped -- a track surviving an occlusion with a hole is the behaviour that matters
-    here, so it has to be visible in the render."""
+def draw_hud(out, text, scale=1.0):
+    """Burn the frame number into the corner.
+
+    Without it a track number is only half an address: a fault is "track 26 drifts", which
+    cannot be looked up, rather than "track 26 drifts at frame 145", which can. Drawn on a
+    filled box because a plate corner is as likely to be white sky as black shadow.
+    """
+    fs = 0.7 * scale
+    th = max(1, int(round(2 * scale)))
+    (tw, tht), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, fs, th)
+    pad = int(round(8 * scale))
+    cv2.rectangle(out, (pad, pad), (pad * 2 + tw, pad * 2 + tht), (0, 0, 0), -1)
+    cv2.putText(out, text, (pad + pad // 2, pad + tht + pad // 4),
+                cv2.FONT_HERSHEY_SIMPLEX, fs, (255, 255, 255), th, cv2.LINE_AA)
+    return out
+
+
+def draw_overlay(frame_bgr, tracks, vis, t, colors, tail=12, hide_occluded=False,
+                 label=False, prefix="JT", scale=1.0):
+    """Points at frame t with a short tail.
+
+    By default an occluded point is drawn HOLLOW rather than dropped: a track surviving an
+    occlusion with a hole is the behaviour this repo is built around, so it has to be
+    visible when judging the model.
+
+    `hide_occluded` drops it from the frame instead. That is for reading the *usable* track
+    set -- with half the points hollow on a hard plate the two populations move together and
+    the eye cannot separate what the tracker stands behind from what it does not. It changes
+    only the render; the .txt and .npz are unaffected, and the 3DE export already omits
+    occluded frames, so `hide_occluded` is what the exported file actually contains.
+
+    `label` writes each track's number beside it, matching the name in the 3DE export
+    (`<prefix>_%04d`) so a point on screen can be found in the file and named in a
+    conversation. Labels are drawn only for points that are actually shown.
+    """
     out = frame_bgr.copy()
+    fs = 0.34 * scale
     for i in range(tracks.shape[1]):
+        shown = bool(vis[t, i])
+        if hide_occluded and not shown:
+            continue
         col = colors[i]
         t0 = max(0, t - tail)
         seg, sv = tracks[t0:t + 1, i], vis[t0:t + 1, i]
@@ -90,7 +125,15 @@ def draw_overlay(frame_bgr, tracks, vis, t, colors, tail=12):
                 cv2.line(out, tuple(np.int32(seg[k - 1])), tuple(np.int32(seg[k])),
                          col, 1, cv2.LINE_AA)
         p = tuple(np.int32(tracks[t, i]))
-        cv2.circle(out, p, 3, col, -1 if vis[t, i] else 1, cv2.LINE_AA)
+        cv2.circle(out, p, 3, col, -1 if shown else 1, cv2.LINE_AA)
+        if label:
+            # Black underlay first, then the coloured text. A single pass is unreadable
+            # over a bright plate, which is most of a VFX plate.
+            org = (p[0] + 5, p[1] - 5)
+            cv2.putText(out, str(i), org, cv2.FONT_HERSHEY_SIMPLEX, fs, (0, 0, 0),
+                        3, cv2.LINE_AA)
+            cv2.putText(out, str(i), org, cv2.FONT_HERSHEY_SIMPLEX, fs, col,
+                        1, cv2.LINE_AA)
     return out
 
 

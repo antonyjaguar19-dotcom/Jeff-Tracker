@@ -57,32 +57,36 @@ kept at 512×512 so random-crop augmentation still has room.
 source is a ~1.9 TB re-download; a converter that deletes as it goes would destroy it on the
 strength of a bug it is itself carrying.
 
-## Results: a trade, not an upgrade
+## Results: it wins on the benches and loses on real footage
 
-`c8_kubric` against `c5_occl1` (the previous best), three late checkpoints per arm, five
-synthetic occlusion benches with exact ground truth, 20 comparisons:
+`c8_kubric` against `c5_occl1`, three late checkpoints per arm, five synthetic occlusion
+benches, 20 comparisons: **12 separated better, 2 worse, 6 overlap.** Visible accuracy ~3%
+tighter and re-acquisition ~4.5% better, separated on 5 of 5.
 
-| metric | separated better | separated worse | overlap |
-|---|---|---|---|
-| **visible mean** | **5 of 5** | 0 | 0 |
-| **re-acquire mean** | **5 of 5** | 0 | 0 |
-| occluded mean | 1 | 1 | 3 |
-| occluded median | 1 | 1 | 3 |
+**Read that with the caveat, which is the important half: all five benches derive from one
+synthetic shot** — `lab02`, a textured flat plane under a homography, with cards or depth
+planes composited over it. Five benches, one plate. A gain there says the model improved on
+textured planes under clean motion, not that it improved on plates.
 
-Every treatment checkpoint beats every control checkpoint on visible accuracy (~3%) and on
-re-acquisition (~4.5%), on every bench. Re-acquisition is the column that matters most for
-matchmove: a point returning on the *neighbouring* feature looks correct in the viewport and
-quietly poisons a camera solve.
+Every real-footage measurement points the other way:
 
-**It costs about a point on the public benchmark:**
+| test | better |
+|---|---|
+| **TAP-Vid DAVIS, 30 real clips** | **`c5_occl1`** — 68.3 / 79.8 / 89.9 against 67.2 / 79.3 / 88.8 |
+| real 4K plate, frames committed to | **`c5_occl1`** — 53.1% against 48.7% |
+| real plate against a hand-built reference | tie — 3.32 against 3.36 px, inside the reference's own 0.60 px noise |
+| real plate, forward-and-back closure | **`c5_occl1`** — mean 0.672 against 0.718, worst 7.22 against 12.58 |
+| a second real plate, closure median | **`c5_occl1`** — 1.023 against 1.156 |
+| that same plate, closure worst case | **`c8_kubric`** — 338 against 611 |
 
-| TAP-Vid DAVIS strided | AJ | δ_avg | OA |
-|---|---|---|---|
-| `c5_occl1` | **68.3** | **79.8** | **89.9** |
-| `c8_kubric` | 67.2 | 79.3 | 88.8 |
+`c8_kubric`'s only consistent advantage is a better tail on one plate, and the other plate
+reverses it. **`c5_occl1` remains the recommendation**; `c8_kubric` is published because the
+training is reproducible, not because it is an upgrade.
 
-DAVIS is internet video; the benches are camera-move footage with per-pixel truth. Take
-`c8_kubric` for matchmove, and not for a DAVIS number.
+The first version of this document recommended `c8_kubric`. That was wrong, and it was wrong
+in an instructive way: the DAVIS regression was measured the same day and reported honestly,
+and the recommendation was written anyway because five bench rows outvoted one real-footage
+row. A bench suite built from a single synthetic plate cannot carry that much weight.
 
 ## What it did not do, and the mechanism
 

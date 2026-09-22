@@ -40,7 +40,8 @@ import torch  # noqa: E402
 
 from jefftrack.engine import JeffTrackEngine, DEFAULT_CKPT  # noqa: E402
 from jefftrack.io import (  # noqa: E402
-    draw_overlay, list_frames, read_frame, seed_corners, seed_grid, track_colors,
+    draw_hud, draw_overlay, list_frames, read_frame, seed_corners, seed_grid,
+    track_colors,
     write_3de,
 )
 
@@ -67,6 +68,16 @@ def main() -> int:
     ap.add_argument("--points", type=int, default=400)
     ap.add_argument("--render-width", type=int, default=1920)
     ap.add_argument("--no-render", action="store_true")
+    ap.add_argument("--hide-occluded", action="store_true",
+                    help="drop occluded points from the render instead of drawing them "
+                         "hollow. On a hard plate half the points can be hollow, both "
+                         "populations move together, and the usable track set becomes "
+                         "unreadable. Affects the mp4 only -- the .txt and .npz are "
+                         "unchanged, and the 3DE export already omits occluded frames, so "
+                         "this shows what the exported file actually contains")
+    ap.add_argument("--label", action="store_true",
+                    help="write each track's number beside it, matching the name in the "
+                         "3DE export (JT_%%04d), so a point on screen can be named")
     ap.add_argument("--fps", type=float, default=24.0)
     a = ap.parse_args()
 
@@ -122,7 +133,13 @@ def main() -> int:
                              cv2.VideoWriter_fourcc(*"mp4v"), a.fps, (rw, rh))
         colors = track_colors(tracks.shape[1])
         for t in range(T):
-            frame = draw_overlay(frames[t], tracks, vis, t, colors)
+            frame = draw_overlay(frames[t], tracks, vis, t, colors,
+                                 hide_occluded=a.hide_occluded, label=a.label,
+                                 scale=Ww / float(rw))
+            # The SHOT's frame number, not the clip index: --start offsets the run and a
+            # number that disagrees with 3DE is worse than none.
+            draw_hud(frame, "frame {}   {} tracks".format(
+                first_frame + t, int(vis[t].sum())), scale=Ww / float(rw))
             vw.write(cv2.resize(frame, (rw, rh), interpolation=cv2.INTER_AREA)
                      if rw != Ww else frame)
         vw.release()

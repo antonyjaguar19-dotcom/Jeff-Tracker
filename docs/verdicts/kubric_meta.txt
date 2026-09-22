@@ -1,0 +1,33 @@
+# Meta's Kubric shots: the licence holds, and the reason to use them
+# is occlusion LENGTH, not occlusion volume
+
+facebook/CoTracker3_Kubric is Apache-2.0 -- checked on the dataset
+page AND the HF API, not assumed. CoTracker3's code and weights stay
+CC-BY-NC; the shots it was trained on do not. That split is the whole
+opening.
+
+The obvious pitch was wrong and got corrected before it reached a
+plan. More occluded samples? Barely: 7.06% hidden-while-on-screen
+against MOVi-E's ~5.5%. Three quarters of what the data calls
+"occluded" is a point that simply left frame.
+
+What IS different: MOVi-E clips are 24 frames, so an occlusion longer
+than 24 frames cannot exist in them. Here 18.5% of events run past
+that, median 4, mean 12.7, longest 117. PLAN.md names a model taught
+only on short occlusions -- one that coasts through a long hide and
+returns on the neighbouring feature, confidently -- as the risk this
+work carries. This is the first data that can argue with it.
+
+Three traps, each settled against the pixels rather than a field name,
+each capable of producing a normal-looking run and a ruined model:
+the array called "visibility" means OCCLUDED; coordinates are (x, y);
+75% of "occluded" is off-screen.
+
+585 GB -> 43 GB, 14.8x, by dropping 252 MB/shot of float64 depth the
+tracker never reads and a 145 MB bundle holding byte-identical copies
+of arrays already stored beside it.
+
+~ No accuracy number yet. Nothing has been trained. The case here is
+~ about what the data CONTAINS. Route 1b looked like a modest win on a
+~ single checkpoint and was a wash on the overlap test -- same
+~ discipline applies before any of this counts.

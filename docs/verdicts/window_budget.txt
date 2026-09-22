@@ -1,0 +1,36 @@
+# The window budget was a guess, and it cost half a shot
+
+Found by the artist, not by a bench: on SH006 (312 frames) the track
+count fell 166 -> 59 at frame 251 and never recovered. 251 is not
+anything in the footage. It is the start of window 2 at the hardcoded
+250-frame budget.
+
+Every later window re-finds each track from its appearance on the
+QUERY frame. On a 312-frame shot that is a 250-frame jump in one step
+with no intermediate context, so the model is honestly unsure and
+says so. Anchoring (fixed 2026-09-10) fixed track IDENTITY at the
+seam. It did not fix CONFIDENCE.
+
+Cost of the split, measured: frames 251-312 averaged 72 tracks
+windowed against 185 in one window. Overall coverage 41.4% -> 47.0%.
+Price of running it whole: 0.26 GB and no extra time.
+
+Measured properly, one process per point, peak RESERVED not allocated:
+
+  256x256   250f  8.35 GB   400f 14.13   500f 16.84   600f 20.93
+  384x512   120f 13.28 GB   200f 22.07   300f 37.96
+
+Linear in frames. INDEPENDENT of track count -- 400 frames is 14.13 GB
+at 400 tracks and 14.14 at 800.
+
+The old 120 at 384x512 was right (117 fits). The old 250 at 256x256
+was out by 50% -- 382 fits. Replaced by a budget derived from the
+card's FREE memory and the measured cost per pixel per frame, so it
+also adapts to a different card or a busy one. SH006 now runs whole
+with no flag.
+
+~ The reason a wrong budget survived: overshooting does NOT raise
+~ OutOfMemory on Windows. WDDM spills to host memory and the run
+~ silently slows from 0.030 to 0.55 s/frame -- 18x, no error, no clue.
+~ A splitting run now prints the seam frame and the VRAM it would
+~ take to avoid it.

@@ -1,34 +1,41 @@
-# Run 1 on Meta's Kubric -- KEEP, but not for the reason it was run
+# Run 1 on Meta's Kubric -- SUPERSEDED. Do not ship it.
 
-c5_occl1's recipe with one change: --data-source kubric_meta.
-Clip length held at 24 frames so the DATA is the only variable.
-Both arms re-measured in one session, 3 late checkpoints each.
+ORIGINAL VERDICT (2026-09-21): keep. c5_occl1's recipe with
+--data-source kubric_meta, clip length held at 24 frames. Overlap
+test, 3 late checkpoints per arm, 20 comparisons: 12 separated
+better, 2 worse, 6 overlap. Visible ~3% tighter and re-acquire ~4.5%
+better, separated on 5 of 5 benches.
 
-Overlap test, 20 comparisons: 12 separated better, 2 separated
-worse, 6 overlap.
+CORRECTED (2026-09-22) after the artist said the model felt worse on
+his own footage. He was right and the original verdict was wrong.
 
-CLEAN SWEEPS, every checkpoint beating every control checkpoint
-on all five benches:
-  visible    ~3% tighter
-  re-acquire ~4.5% better   <- the column PLAN.md protects hardest
+The flaw is in the word "benches". All five derive from ONE synthetic
+shot -- lab02, a textured flat plane under a homography, with cards or
+depth planes composited over it. Five benches, one plate. "Separated
+on 5 of 5" sounds like five independent tests and is closer to one
+test scored five ways.
 
-NOT MOVED: occluded accuracy. Separated better on one bench,
-separated WORSE on lab02_depth (2.10-2.17 -> 2.22-2.23), overlap
-on three. lab02_depth is the fairest bench, so that regression is
-the one that counts.
+Every real-footage measurement disagrees:
 
-The mechanism is the opposite of the intent. Coverage at the 0.5
-gate FELL from ~5.5% to ~3.7%: the model now withholds a third of
-the hidden-frame positions it used to emit. More cautious, not
-more capable. That explains everything -- fewer committed guesses
-give tighter tracks and better re-acquisition and zero progress
-through an occlusion -- and it predicts the depth regression, the
-one bench where coverage did not fall.
+  TAP-Vid DAVIS, 30 real clips   c5 68.3/79.8/89.9  c8 67.2/79.3/88.8
+  SH006, frames committed to     c5 53.1%           c8 48.7%
+  SH004 vs hand reference        3.32 px            3.36 px  (tie,
+                                 reference noise floor is 0.60 px)
+  SH004 closure, mean            c5 0.672           c8 0.718
+  SH004 closure, worst           c5 7.22            c8 12.58
+  SH012 closure, median          c5 1.023           c8 1.156
+  SH012 closure, worst           c5 610.58          c8 338.21  <- c8
+  SH006 closure                  both fail (50+ px), see window_budget
 
-Against CoTracker3: 1.69 cards / 1.708 depth. We were 3.04/2.12,
-we are now 2.90/2.22. Gap unchanged.
+c8's only consistent advantage is a better worst-case tail on ONE
+plate, and SH004 reverses even that.
 
-~ The property this dataset was CHOSEN for is still untested. 18.5%
-~ of its occlusion events run past 24 frames and a 24-frame window
-~ cannot contain one. Run 2 (c9_clip48) is that test; run 1 is its
-~ control.
+SHIPS: c5_occl1.
+PUBLISHED BUT NOT RECOMMENDED: c8_kubric.
+
+~ The lesson is about the bench suite, not the checkpoint. One
+~ synthetic plate cannot decide whether a model helps on plates. The
+~ DAVIS regression was measured on the same day as the original
+~ verdict and reported honestly -- and the verdict was written anyway,
+~ because five bench rows outvoted one real-footage row. They should
+~ not have.

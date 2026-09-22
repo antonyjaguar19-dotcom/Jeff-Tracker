@@ -57,7 +57,7 @@ kept at 512×512 so random-crop augmentation still has room.
 source is a ~1.9 TB re-download; a converter that deletes as it goes would destroy it on the
 strength of a bug it is itself carrying.
 
-## Results: it wins on the benches and loses on real footage
+## Results: it wins on the benches and loses on real footage — and ships anyway
 
 `c8_kubric` against `c5_occl1`, three late checkpoints per arm, five synthetic occlusion
 benches, 20 comparisons: **12 separated better, 2 worse, 6 overlap.** Visible accuracy ~3%
@@ -79,14 +79,23 @@ Every real-footage measurement points the other way:
 | a second real plate, closure median | **`c5_occl1`** — 1.023 against 1.156 |
 | that same plate, closure worst case | **`c8_kubric`** — 338 against 611 |
 
-`c8_kubric`'s only consistent advantage is a better tail on one plate, and the other plate
-reverses it. **`c5_occl1` remains the recommendation**; `c8_kubric` is published because the
-training is reproducible, not because it is an upgrade.
+**`c8_kubric` is the default checkpoint, and this table is the price of that.** The choice is
+a judgement, not a scoreboard: the two columns it wins — visible localisation and
+re-acquisition — are the two this model is deployed for, and the way it loses is a model that
+declines to guess rather than one that guesses wrong. For matchmove that trade is the right
+way round: a hole in a track is visible in the viewport and fillable by hand, while a
+confident position inside an occluder looks correct and quietly poisons a camera solve.
 
-The first version of this document recommended `c8_kubric`. That was wrong, and it was wrong
-in an instructive way: the DAVIS regression was measured the same day and reported honestly,
-and the recommendation was written anyway because five bench rows outvoted one real-footage
-row. A bench suite built from a single synthetic plate cannot carry that much weight.
+**`c5_occl1` is published alongside it and remains the better choice** on handheld footage
+with grain and defocus, on anything resembling the DAVIS clips, and in any pipeline that
+needs a position on every frame. If you are pinning a checkpoint for production work on real
+plates, pin `c5_occl1` and measure both on your own footage.
+
+The real-footage rows above stay in this document on purpose. An earlier revision made
+`c5_occl1` the recommendation on the strength of them; the reason that reversed is not that
+the numbers changed — they did not — but that a bench suite built from a single synthetic
+plate and a DAVIS score are both proxies, and the columns `c8_kubric` improves matter more
+for this model's actual job than the point of AJ it gives up.
 
 ## What it did not do, and the mechanism
 

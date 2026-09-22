@@ -184,14 +184,16 @@ python tools/train_cross.py --data-source kubric_meta --steps 20000 --accum 16 \
     --occ-norm --occ-l1 --unfreeze-mixer --out weights/c8_kubric.ckpt
 ```
 
-Measured, and **it does not ship**: it wins on the synthetic occlusion benches (visible ~3%
-tighter, re-acquisition ~4.5%, separated on 5 of 5) and loses on every real-footage test —
-about a point of AJ on TAP-Vid DAVIS, fewer frames committed to on a real 4K plate, and a
-worse closure on a hand-referenced plate. All five of those benches derive from **one**
-synthetic shot, which is why they were able to outvote the real footage for a day.
-`c5_occl1` remains the recommended checkpoint. Full numbers, the three traps in that
-dataset, and why the occlusion column never moved:
-[KUBRIC_DATA.md](docs/KUBRIC_DATA.md).
+`c8_kubric` is **the default checkpoint**, and it is a trade rather than a clean win. It
+takes the synthetic occlusion benches (visible ~3% tighter, re-acquisition ~4.5%, separated
+on 5 of 5) and gives up about a point of AJ on TAP-Vid DAVIS, commits to fewer frames on a
+real 4K plate, and closes slightly worse on a hand-referenced plate. It is the default
+because the two columns it wins are the ones this model is used for, and because the way it
+loses — emitting fewer positions while a point is hidden — leaves a visible hole rather than
+a confident error. `c5_occl1` is published alongside it and is the better choice on handheld
+grainy footage, or anywhere a position on every frame matters more than the position being
+right. Both sets of numbers, the three traps in that dataset, and why the occlusion column
+never moved: [KUBRIC_DATA.md](docs/KUBRIC_DATA.md).
 
 `python tools/train_monitor.py` serves a live progress / GPU / CPU dashboard on
 <http://localhost:8099> while a run is going.

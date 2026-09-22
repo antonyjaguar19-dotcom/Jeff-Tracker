@@ -1,4 +1,5 @@
-# Run 1 on Meta's Kubric -- SUPERSEDED. Do not ship it.
+# Run 1 on Meta's Kubric -- SHIPPED BY MAINTAINER OVERRIDE (2026-09-22).
+# The measurements below are unchanged. Read them before pinning.
 
 ORIGINAL VERDICT (2026-09-21): keep. c5_occl1's recipe with
 --data-source kubric_meta, clip length held at 24 frames. Overlap
@@ -30,8 +31,14 @@ Every real-footage measurement disagrees:
 c8's only consistent advantage is a better worst-case tail on ONE
 plate, and SH004 reverses even that.
 
-SHIPS: c5_occl1.
-PUBLISHED BUT NOT RECOMMENDED: c8_kubric.
+SHIPS: c8_kubric, by maintainer decision on 2026-09-22, taken with
+the table above in front of it. The case is that visible accuracy and
+re-acquisition are the columns this model is used for, and that c8
+loses by declining to emit a position rather than by emitting a wrong
+one -- a hole an artist can see and fill, not a confident error
+inside an occluder that survives into a camera solve.
+ALSO PUBLISHED, and the better choice on handheld grainy footage or
+wherever every frame needs a position: c5_occl1.
 
 ~ The lesson is about the bench suite, not the checkpoint. One
 ~ synthetic plate cannot decide whether a model helps on plates. The

@@ -37,14 +37,20 @@ def _ckpt(filename, repo_id=None, repo_type="model"):
 
 def jefftracker(pretrained: bool = True, model_res=(256, 256), device: str = "cuda",
               ckpt: str = None, **kw):
-    """Jeff-Tracker -- LocoTrack-B plus cross-track attention, trained on MOVi-E.
+    """Jeff-Tracker -- LocoTrack-B plus cross-track attention, trained on Meta's Kubric.
 
     256x256 is the default deliberately. At higher model resolutions the median improves
     and a tail of confident, badly wrong tracks appears with it; METHOD.md has the
     numbers. Raise it only if you are gating on the returned confidence.
+
+    The default weights are `c8_kubric.ckpt`: tighter visible tracks and better
+    re-acquisition, at the cost of about a point of AJ on TAP-Vid DAVIS and a model that
+    emits fewer positions while a point is hidden. On handheld grainy footage, or in a
+    pipeline that needs a position on EVERY frame, pass ckpt= the older `c5_occl1.ckpt`
+    instead -- docs/KUBRIC_DATA.md has both sets of numbers.
     """
     from jefftrack.engine import JeffTrackEngine              # noqa: PLC0415
-    path = ckpt or (_ckpt("inf_s4000.ckpt") if pretrained else None)
+    path = ckpt or (_ckpt("c8_kubric.ckpt") if pretrained else None)
     return JeffTrackEngine(device=device, model_size="base", ckpt=path,
                          model_res=model_res, arch="jefftrack", **kw)
 

@@ -138,6 +138,10 @@ def main() -> int:
                          "--huber-delta, so a hidden point 2-3 px out -- the range this "
                          "model actually loses in -- is barely corrected. Visible keeps "
                          "Huber. Only meaningful with --occ-norm.")
+    ap.add_argument("--reacq-share", type=float, default=0.0,
+                    help="Dedicated share of position loss applied to the first frame of "
+                         "emergence from an occlusion (re-acquisition surge). Focuses "
+                         "gradient power on snapping back to the feature upon reappearance.")
     ap.add_argument("--carry-state", action="store_true",
                     help="carry the proxy tokens through the vendor's TEMPORAL attention "
                          "between cross blocks, instead of rebuilding them per frame from "
@@ -168,7 +172,7 @@ def main() -> int:
     n_all = sum(p.numel() for p in model.parameters())
     n_mixer = sum(p.numel() for p in model.mixer_parameters() if p.requires_grad)
     print("[model] {} trainable of {} ({:.1f}%)   zero-init={}".format(
-        n_train, n_all, 100.0 * n_train / n_all, a.resume is None))
+        n_train, n_all, 100.0 * n_train / n_all, a.resume is None), flush=True)
     # Report each bucket from its OWN parameters, not by subtraction. With a widened
     # pyramid the extra CMDTop levels are trainable too, and a subtracted "cross" figure
     # silently absorbs them -- the log then claims 168k more cross-track parameters than
@@ -177,17 +181,17 @@ def main() -> int:
     n_cmdtop = sum(p.numel() for i in range(3, len(model.cmdtop))
                    for p in model.cmdtop[i].parameters() if p.requires_grad)
     print("[model] cross {}   temporal mixer {}   extra cmdtop {}   image encoder frozen"
-          .format(n_cross, n_mixer if a.unfreeze_mixer else "FROZEN", n_cmdtop))
+          .format(n_cross, n_mixer if a.unfreeze_mixer else "FROZEN", n_cmdtop), flush=True)
     leftover = n_train - n_cross - n_mixer - n_cmdtop
     if leftover:
-        print("[model] WARNING {} trainable parameters in neither bucket".format(leftover))
+        print("[model] WARNING {} trainable parameters in neither bucket".format(leftover), flush=True)
     print("[loss]  occluded position {} {} ({})".format(
         "SHARE" if a.occ_norm else "weight", a.occ_pos_weight,
         "vendor objective: occluded frames get NO position gradient"
         if a.occ_pos_weight == 0 else
         ("a stated fraction of the position loss" if a.occ_norm
          else "per-sample multiplier -- actual share depends on how much occlusion the "
-              "clip contains")))
+              "clip contains")), flush=True)
 
     opt = torch.optim.AdamW(trainable, lr=a.lr, weight_decay=a.wd)
 
@@ -208,7 +212,7 @@ def main() -> int:
 
     sched = torch.optim.lr_scheduler.LambdaLR(opt, _lr)
     print("[sched] {} decay over {} updates ({} steps / accum {}), warmup {}".format(
-        a.lr_decay, total_updates, a.steps, a.accum, warmup_updates))
+        a.lr_decay, total_updates, a.steps, a.accum, warmup_updates), flush=True)
 
     # EMA over the trainable weights only -- the frozen ones never move, so shadowing them
     # would just double the memory for a copy of themselves.
@@ -216,7 +220,7 @@ def main() -> int:
     if a.ema and a.ema > 0:
         ema = {n: p.detach().clone() for n, p in model.named_parameters()
                if p.requires_grad}
-        print("[ema]   decay {} over {} tensors".format(a.ema, len(ema)))
+        print("[ema]   decay {} over {} tensors".format(a.ema, len(ema)), flush=True)
 
     # Imported here, not at module scope: tensorflow is a heavy import that only the
     # training path needs, and a missing pydeps install should fail with the message in
@@ -224,9 +228,9 @@ def main() -> int:
     if a.data_source == "kubric_meta":
         from jefftrack.data.kubric_meta import DEFAULT_CACHE, batches  # noqa: E402
         a.cache_dir = a.cache_dir or DEFAULT_CACHE
-        print("[data] Meta CoTracker3_Kubric cache: {}".format(a.cache_dir))
+        print("[data] Meta CoTracker3_Kubric cache: {}".format(a.cache_dir), flush=True)
         print("       clip {} frames, {} tracks, {}x{}, holdout {} shots"
-              .format(a.clip_len, a.tracks, a.res, a.res, a.holdout))
+              .format(a.clip_len, a.tracks, a.res, a.res, a.holdout), flush=True)
         stream = batches(device=device, cache_dir=a.cache_dir, batch_size=1,
                          tracks_to_sample=a.tracks, clip_len=a.clip_len,
                          train_size=(a.res, a.res), holdout=a.holdout, seed=a.seed)
@@ -290,7 +294,8 @@ def main() -> int:
                         query_chunk_size=a.tracks)
             loss, _ = tapir_loss_weighted(batch, out,
                                           occluded_weight=a.occ_pos_weight,
-                                          occ_norm=a.occ_norm, occ_l1=a.occ_l1)
+                                          occ_norm=a.occ_norm, occ_l1=a.occ_l1,
+                                          reacq_share=a.reacq_share)
         (loss / a.accum).backward()
 
         running += float(loss.detach())

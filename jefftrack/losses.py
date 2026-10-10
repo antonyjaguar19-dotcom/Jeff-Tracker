@@ -37,8 +37,23 @@ from jefftrack.paths import add_vendor_to_path
 
 add_vendor_to_path()
 
-from model_utils import prob_loss  # noqa: E402  (vendor, unchanged)
 from models.utils import convert_grid_coordinates  # noqa: E402
+
+
+def prob_loss(tracks, expd, target_points, occluded, expected_dist_thresh=8.0, reduction_axes=(1, 2)):
+    """Loss for classifying if a point is within pixel threshold of its target.
+
+    Mirrors vendor model_utils.prob_loss without pulling in data.evaluation_datasets
+    (which requires mediapy and tensorflow).
+    """
+    err = torch.sum((tracks - target_points) ** 2, dim=-1)
+    invalid = (err > expected_dist_thresh ** 2).float()
+    logprob = F.binary_cross_entropy_with_logits(expd, invalid, reduction="none")
+    logprob = logprob * (1.0 - occluded.float())
+    if reduction_axes:
+        logprob = torch.mean(logprob, dim=reduction_axes)
+    return logprob
+
 
 
 def huber_loss_weighted(tracks, target_points, occluded, delta=4.0,
@@ -77,40 +92,13 @@ def huber_loss_weighted(tracks, target_points, occluded, delta=4.0,
 
 def position_loss_normalised(tracks, target_points, occluded, delta=4.0,
                              occ_share=0.2, occluded_in_frame_only=True,
-                             frame_size=256.0, margin=0.0, occ_l1=False):
+                             frame_size=256.0, margin=0.0, occ_l1=False,
+                             reacq_share=0.0):
     """Position loss whose occluded share is a STATED fraction, not an accident.
 
-    The defect this fixes, measured: `huber_loss_weighted` takes one mean over every
-    sample, so the occluded contribution is (occluded count / total count) * weight. On
-    MOVi-E that is ~11% occluded, roughly half of it in frame, times 0.2 -- about **1% of
-    the position loss**. Too weak to hold a solution against the visible objective, which
-    is why the occluded result oscillates between +3.4 points and zero across checkpoints
-    instead of converging. Step 4000 was a good draw from that wandering, not a plateau.
-
-    Here the two populations are averaged separately, each by its OWN count, and then
-    combined:
-
-        L = (1 - occ_share) * mean(visible) + occ_share * mean(occluded in frame)
-
-    so `occ_share` is exactly the fraction of the position gradient that comes from
-    occluded frames, whatever proportion of the clip happens to be occluded. That is the
-    difference between a weight and a share, and only the second is a quantity you can
-    reason about.
-
-    Reduces to nothing: with no occluded-and-in-frame samples in the batch the occluded
-    term is dropped and the visible mean carries the whole loss, rather than producing a
-    nan. That case is common at small batch, which is the regime this is aimed at.
-
-    `occ_l1` switches the OCCLUDED population from Huber to plain L1, which is what
-    CoTracker3's recipe does (Huber on visible, L1 on invisible; the weights are stated in
-    its training script, and this is written from that description -- see ../LICENSES.md).
-    The reason it is not a detail: Huber is quadratic below `delta`, so an occluded point
-    sitting 2-3 px out -- exactly the range this model loses in, measured occluded mean
-    2.837 px against CoTracker3's 1.69-1.99 -- contributes only dist^2/2 and is barely
-    corrected. L1 keeps a constant gradient all the way to zero, so the moderate misses
-    that make up the gap are pushed on as hard as the large ones. The visible population
-    keeps Huber, because there the quadratic region is doing the right thing: it is what
-    stops sub-pixel noise dominating a converged track.
+    Optionally includes a Re-acquisition Surge Loss (reacq_share) applied directly to the
+    first frame of emergence (when a point transitions from occluded to visible).
+    Emergence frames carry critical information for matchmove track recovery.
     """
     error = tracks - target_points
     distsqr = torch.sum(error ** 2, dim=-1)
@@ -129,9 +117,27 @@ def position_loss_normalised(tracks, target_points, occluded, delta=4.0,
     n_vis, n_occ = vis.sum(), occ.sum()
     mean_vis = (loss * vis).sum() / torch.clamp(n_vis, min=1.0)
     if float(n_occ) <= 0.0:
+        mean_occ = torch.tensor(0.0, device=tracks.device)
+    else:
+        mean_occ = (loss_occ_pop * occ).sum() / n_occ
+
+    # Re-acquisition surge: frames transitioning from occluded (t-1) to visible (t)
+    loss_reacq = torch.tensor(0.0, device=tracks.device)
+    if reacq_share > 0.0 and occluded.shape[-1] > 1:
+        is_reacq = (occluded[..., :-1] > 0.5) & (occluded[..., 1:] < 0.5)
+        reacq_mask = torch.cat([torch.zeros_like(is_reacq[..., :1]), is_reacq], dim=-1).float()
+        n_reacq = reacq_mask.sum()
+        if float(n_reacq) > 0.0:
+            loss_reacq = (dist * reacq_mask).sum() / n_reacq
+
+    if float(n_occ) <= 0.0:
+        if reacq_share > 0.0:
+            return (1.0 - reacq_share) * mean_vis + reacq_share * loss_reacq
         return mean_vis
-    mean_occ = (loss_occ_pop * occ).sum() / n_occ
-    return (1.0 - occ_share) * mean_vis + occ_share * mean_occ
+
+    w_vis = max(0.0, 1.0 - occ_share - reacq_share)
+    return w_vis * mean_vis + occ_share * mean_occ + reacq_share * loss_reacq
+
 
 
 def occluded_share_of(tracks, target_points, occluded, delta=4.0,
@@ -163,7 +169,7 @@ def occluded_share_of(tracks, target_points, occluded, delta=4.0,
 
 def _one_iter(points, occlusion, target_points, target_occ, shape, expected_dist,
               position_loss_weight, expected_dist_thresh, huber_delta, occluded_weight,
-              occluded_in_frame_only, occ_norm=False, occ_l1=False):
+              occluded_in_frame_only, occ_norm=False, occ_l1=False, reacq_share=0.0):
     points = convert_grid_coordinates(points, shape[3:1:-1], (256, 256),
                                       coordinate_format="xy")
     target_points = convert_grid_coordinates(target_points, shape[3:1:-1], (256, 256),
@@ -173,7 +179,8 @@ def _one_iter(points, occlusion, target_points, target_occ, shape, expected_dist
         loss_huber = position_loss_normalised(
             points, target_points, target_occ, delta=huber_delta,
             occ_share=occluded_weight, occ_l1=occ_l1,
-            occluded_in_frame_only=occluded_in_frame_only) * position_loss_weight
+            occluded_in_frame_only=occluded_in_frame_only,
+            reacq_share=reacq_share) * position_loss_weight
     else:
         loss_huber = huber_loss_weighted(points, target_points, target_occ,
                                          delta=huber_delta,
@@ -196,7 +203,7 @@ def _one_iter(points, occlusion, target_points, target_occ, shape, expected_dist
 def tapir_loss_weighted(batch, output, position_loss_weight=0.05,
                         expected_dist_thresh=6.0, huber_delta=4.0,
                         occluded_weight=0.2, occluded_in_frame_only=True,
-                        occ_norm=False, occ_l1=False):
+                        occ_norm=False, occ_l1=False, reacq_share=0.0):
     """Same total as the vendor's tapir_loss, refinement iterations included.
 
     `occ_norm=False` is the historical path and, at occluded_weight=0.0, reproduces the
@@ -211,7 +218,7 @@ def tapir_loss_weighted(batch, output, position_loss_weight=0.05,
     loss_huber, loss_occ, loss_prob = _one_iter(
         output["tracks"], output["occlusion"], tgt_p, tgt_o, shape,
         output.get("expected_dist"), position_loss_weight, expected_dist_thresh,
-        huber_delta, occluded_weight, occluded_in_frame_only, occ_norm, occ_l1)
+        huber_delta, occluded_weight, occluded_in_frame_only, occ_norm, occ_l1, reacq_share)
     loss = loss_huber + loss_occ + loss_prob
     scalars = {"position_loss": loss_huber, "occlusion_loss": loss_occ,
                "prob_loss": loss_prob}
@@ -222,7 +229,7 @@ def tapir_loss_weighted(batch, output, position_loss_weight=0.05,
         h, o, p = _one_iter(
             output["unrefined_tracks"][l], output["unrefined_occlusion"][l],
             tgt_p, tgt_o, shape, ed, position_loss_weight, expected_dist_thresh,
-            huber_delta, occluded_weight, occluded_in_frame_only, occ_norm, occ_l1)
+            huber_delta, occluded_weight, occluded_in_frame_only, occ_norm, occ_l1, reacq_share)
         loss = loss + h + o + p
 
     scalars["loss"] = loss

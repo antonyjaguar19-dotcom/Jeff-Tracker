@@ -15,9 +15,50 @@ import numpy as np  # noqa: E402
 
 
 IMG_EXT = (".png", ".jpg", ".jpeg", ".exr", ".tif", ".tiff", ".dpx")
+VIDEO_EXT = (".mp4", ".mov", ".avi", ".mkv", ".webm")
 
 
 # --------------------------------------------------------------------------- plate io
+def load_plate_frames(plate_path: str, start: int = 1, end: int = 0, work_w: int = 0):
+    """Load frames from either a directory of image files or a video file (.mp4, .mov, etc.).
+
+    Returns (frames (T,H,W,3) uint8 BGR, (plate_w, plate_h), first_frame).
+    """
+    if os.path.isfile(plate_path) and os.path.splitext(plate_path)[1].lower() in VIDEO_EXT:
+        cap = cv2.VideoCapture(plate_path)
+        if not cap.isOpened():
+            raise SystemExit("[ERROR] cannot open video: {}".format(plate_path))
+        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        orig_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        orig_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        plate_wh = (orig_w, orig_h)
+        lo = max(1, start) - 1
+        hi = total if end in (0, None) else min(end, total)
+        frames = []
+        cap.set(cv2.CAP_PROP_POS_FRAMES, lo)
+        for _ in range(hi - lo):
+            ret, fr = cap.read()
+            if not ret or fr is None:
+                break
+            if work_w and work_w < orig_w:
+                work_h = int(round(orig_h * work_w / float(orig_w)))
+                fr = cv2.resize(fr, (work_w, work_h), interpolation=cv2.INTER_AREA)
+            frames.append(fr)
+        cap.release()
+        if not frames:
+            raise SystemExit("[ERROR] no frames decoded from {}".format(plate_path))
+        return np.stack(frames), plate_wh, lo + 1
+
+    # Directory of frames
+    files, first_frame = list_frames(plate_path, start, end)
+    frames, plate_wh = [], None
+    for f in files:
+        img, wh = read_frame(f, work_w)
+        plate_wh = wh
+        frames.append(img)
+    return np.stack(frames), plate_wh, first_frame
+
+
 def list_frames(plate_dir: str, start: int, end: int):
     files = sorted(f for f in glob.glob(os.path.join(plate_dir, "*"))
                    if os.path.splitext(f)[1].lower() in IMG_EXT)
@@ -44,6 +85,7 @@ def read_frame(path: str, work_w: int):
         work_h = int(round(H * work_w / float(W)))
         img = cv2.resize(img, (work_w, work_h), interpolation=cv2.INTER_AREA)
     return img, (W, H)
+
 
 
 # --------------------------------------------------------------------------- seeding
@@ -76,21 +118,45 @@ def track_colors(n: int):
     return [tuple(int(c) for c in row) for row in bgr]
 
 
-def draw_overlay(frame_bgr, tracks, vis, t, colors, tail=12):
-    """Points at frame t with a short tail. Occluded points are drawn hollow rather than
-    dropped -- a track surviving an occlusion with a hole is the behaviour that matters
-    here, so it has to be visible in the render."""
+def draw_overlay(frame_bgr, tracks, vis, t, colors, tail=12,
+                 is_inpainted=None, header="", gap_occluded=False):
+    """Points at frame t with a short tail.
+
+    - Solid circle: visible and confident.
+    - Hollow ring: raw occluded point (when gap_occluded=False).
+    - Double ring with crosshair: rigidly inpainted occlusion (when is_inpainted is set).
+    - If gap_occluded=True: occluded points are ignored/hidden completely (standard matchmove practice).
+    """
     out = frame_bgr.copy()
+    h, w = out.shape[:2]
     for i in range(tracks.shape[1]):
         col = colors[i]
         t0 = max(0, t - tail)
         seg, sv = tracks[t0:t + 1, i], vis[t0:t + 1, i]
         for k in range(1, len(seg)):
-            if sv[k] and sv[k - 1]:
-                cv2.line(out, tuple(np.int32(seg[k - 1])), tuple(np.int32(seg[k])),
-                         col, 1, cv2.LINE_AA)
+            if gap_occluded and (not sv[k - 1] or not sv[k]):
+                continue
+            cv2.line(out, tuple(np.int32(seg[k - 1])), tuple(np.int32(seg[k])),
+                     col, 1, cv2.LINE_AA)
         p = tuple(np.int32(tracks[t, i]))
-        cv2.circle(out, p, 3, col, -1 if vis[t, i] else 1, cv2.LINE_AA)
+        if 0 <= p[0] < w and 0 <= p[1] < h:
+            if is_inpainted is not None and is_inpainted[t, i]:
+                # Inpainted rigid track: double ring
+                cv2.circle(out, p, 5, (0, 255, 255), 1, cv2.LINE_AA)
+                cv2.circle(out, p, 2, col, -1, cv2.LINE_AA)
+            elif vis[t, i]:
+                cv2.circle(out, p, 3, col, -1, cv2.LINE_AA)
+            elif not gap_occluded:
+                cv2.circle(out, p, 4, col, 1, cv2.LINE_AA)
+
+    if header:
+        # Semi-transparent banner
+        banner_h = 36
+        overlay_banner = out[:banner_h, :].copy()
+        cv2.rectangle(out, (0, 0), (w, banner_h), (20, 20, 20), -1)
+        cv2.addWeighted(overlay_banner, 0.35, out[:banner_h, :], 0.65, 0, out[:banner_h, :])
+        cv2.putText(out, header, (12, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.65,
+                    (240, 240, 240), 2, cv2.LINE_AA)
     return out
 
 

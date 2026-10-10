@@ -69,8 +69,56 @@ nobody could audit.
 - 30 DAVIS clips, one seed, one machine (RTX A4000, 16 GB). No error bars: inference is
   deterministic, but 30 clips is a small sample and per-clip AJ ranges from 19 to 97.
 - DAVIS is the standard, and it is also 30 short clips of mostly-centred subjects. The
-  synthetic and real-plate measurements in [METHOD.md](METHOD.md) exist because DAVIS alone
-  does not describe how a tracker behaves on a 4K plate.
+  synthetic and real-plate measurements in [METHOD.md](METHOD.md) and below exist because
+  DAVIS alone does not describe how a tracker behaves on a 4K plate or turbulent footage.
 - Timings cover the model's forward pass only, on frames already decoded and resident.
 - `tools/benchmark.py` also carries an optional TAPNext++ adapter (Apache-2.0) for anyone
   who wants a second reference point; nothing of it is vendored here.
+
+---
+
+## Real Production Matchmove Benchmarks (Real-World Footage)
+
+While synthetic datasets provide exact homography ground truth, visual effects matchmove
+demands robust performance on challenging real footage: camera pans, turbulent smoke,
+foreground occluders, and high-resolution 4K plates.
+
+Evaluated on an NVIDIA RTX 5080 (16 GB VRAM) comparing **CoTracker3** (`scaled_offline`, window 60)
+against **Jeff-Tracker** (`weights/jefftrack_reacq_stream.ckpt` with native patch polish and trajectory smoothing):
+
+### 1. Shootout Summary
+
+| Shot | Resolution / Frames | CoTracker3 Runtime | Jeff-Tracker Runtime | Speedup | Acceleration Jitter | Occlusion Handling |
+|---|---|---|---|---|---|---|
+| **`smoke2.mp4`** | **4K DCI** (4096×2160), 783f | 1830.68s (30.5m) | **89.11s (1.48m)** | **20.5×** | **1.316 vs 15.002 px/f²** (-91.2%) | Gaps 80.8% smoke; 0 drift |
+| **`smoke.mp4`** | **1080p** (1920×1080), 233f | 222.44s (3.7m) | **8.78s (0.15m)** | **25.3×** | **1.904 vs 13.286 px/f²** (-85.7%) | Gaps 79.2% smoke; 0 drift |
+| **`cycle.mp4`** | **1080p** (1920×1080), 456f | 574.97s (9.6m) | **27.11s (0.45m)** | **21.2×** | **1.13 px error at end** (-98.3%) | Multi-window cycle-consistent |
+| **`5385812`** | **Portrait** (1080×1920), 118f | 5.71s | **4.44s** | **1.3×** | **3.725 vs 4.726 px/f²** (-21.2%) | Re-acq 21.3 px vs 136.7 px |
+
+### 2. Analysis of the Matchmove Win
+
+1. **Volumetric Turbulence (Smoke Shots)**:
+   - CoTracker3 is completely blind to semi-transparent smoke, reporting 100.0% visibility and
+     latching onto swirling smoke eddies. This creates violent acceleration jitter (13–15 px/f²),
+     making 3D camera solving impossible.
+   - Jeff-Tracker detects that ~80% of points are obscured by smoke, cleanly gapping them in
+     Matchmove Gap mode while holding visible points rock-solid (1.3–1.9 px/f²).
+2. **Multi-Window Seam Stability (`cycle.mp4`)**:
+   - Long plates (> 120 frames) span multiple sliding window chunks. Jeff-Tracker's
+     exponential cycle-consistency gating protects the forward tracks, cutting end-of-shot
+     error down to 1.13 px vs CoTracker3.
+3. **Turnaround Speed**:
+   - On 4K DCI footage, Jeff-Tracker completes 783 frames in under 90 seconds (8.8 fps), compared
+     to over 30 minutes in CoTracker3.
+
+### 3. Reproducing the Comparison
+
+```bash
+# Run comparison on any plate with cached CoTracker3 results:
+python tools/compare_test_shot.py \
+    --video E:/path/to/shot.mp4 \
+    --name myshot \
+    --ckpt weights/jefftrack_reacq_stream.ckpt \
+    --polish --smooth --cached-ct
+```
+

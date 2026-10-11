@@ -1,11 +1,11 @@
 """Stage 2: distil the pseudo-labels from make_pseudo_labels.py into the student.
 
 Companion to `train_cross.py`, which is stage 1 on Kubric with exact ground truth. This is
-the second stage of CoTracker3's recipe, written from its description (LICENSES.md), run on
+the second stage of the published recipe (Karaev et al. 2024), written from its description (LICENSES.md), run on
 our own plates with commercially-clean teachers.
 
-**What this stage does NOT supervise, and why that is the whole point.** CoTracker3's
-real-data loss carries the position terms only:
+**What this stage does NOT supervise, and why that is the whole point.** The published
+recipe's real-data loss carries the position terms only:
 
     coords, visible      0.05      Huber
     coords, invisible    0.01      plain L1, and dropped entirely for one of its teachers
@@ -108,7 +108,7 @@ def load_sample(path, model_res):
 
 def position_loss(pred, target, visible, shape, huber_delta=6.0,
                   w_vis=0.05, w_occ=0.01):
-    """CoTracker3's real-data position loss: Huber where visible, L1 where not.
+    """The published recipe's real-data position loss: Huber where visible, L1 where not.
 
     The 5:1 split is theirs and is deliberate -- occluded positions are supervised, but
     weakly, so a hallucinated position can never dominate the gradient on a label that was
@@ -140,7 +140,7 @@ def main() -> int:
     ap.add_argument("--res", type=int, default=256)
     ap.add_argument("--steps", type=int, default=8000)
     ap.add_argument("--accum", type=int, default=8)
-    # CoTracker3 drops the learning rate by 10x for stage 2 and restores from the stage-1
+    # The published recipe drops the learning rate by 10x for stage 2 and restores from the stage-1
     # baseline. Distillation on labels that are themselves estimates is a refinement of a
     # converged model, not a second training run, and a stage-1 learning rate here walks a
     # good model into the teachers' error distribution.

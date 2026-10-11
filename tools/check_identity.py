@@ -54,7 +54,7 @@ def main() -> int:
     ap.add_argument("--points", type=int, default=24)
     ap.add_argument("--res", type=int, default=256)
     ap.add_argument("--pyramid-level", type=int, default=0,
-                    help="extra correlation levels (CoTracker3 runs four; LocoTrack ships "
+                    help="extra correlation levels (the published recipe runs four; LocoTrack ships "
                          "three). The new channels enter the mixer at ZERO weight, so they "
                          "contribute nothing -- but they WIDEN the input_proj GEMM, which "
                          "changes its accumulation order. Measured: 3.4e-07 relative on "

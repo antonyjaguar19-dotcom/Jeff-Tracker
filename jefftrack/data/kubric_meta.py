@@ -1,4 +1,4 @@
-"""Training batches from Meta's CoTracker3_Kubric, via the local cache.
+"""Training batches from Meta AI's Kubric point-tracking release, via the local cache.
 
 Drop-in for `jefftrack/data/movi.py`: same four keys, same shapes, same units, so
 `train_cross.py` switches dataset with a flag and nothing downstream changes.

@@ -1,7 +1,8 @@
-"""Run direct comparison between CoTracker3 and Jeff-Tracker on the test shot.
+"""Run a direct comparison between an external baseline tracker and Jeff-Tracker on a shot.
 
+The baseline is loaded through JT_BASELINE_ADAPTER (see tools/external_baseline.py).
 Loads the video, seeds the identical points on frame 0, runs:
-  1. CoTracker3
+  1. The baseline
   2. Jeff-Tracker + Matchmove Rigid Inpainting
   3. Jeff-Tracker Raw
 
@@ -28,21 +29,20 @@ import torch
 from jefftrack.engine import JeffTrackEngine, DEFAULT_CKPT
 from jefftrack.io import draw_overlay, load_plate_frames, seed_corners, track_colors
 from jefftrack.rigid_fill import inpaint_rigid_occlusions
-from run_jefftrack import run_cotracker_external
+from external_baseline import label as baseline_label, run_baseline
 
 
 def main():
     import argparse
-    ap = argparse.ArgumentParser(description="Compare CoTracker3 and Jeff-Tracker on test shot")
-    ap.add_argument("--video", default=r"E:\CHAT_GPT\Co_Tracker_v001\tests\cycle.mp4",
-                    help="path to input video file")
+    ap = argparse.ArgumentParser(description="Compare a baseline tracker and Jeff-Tracker on a shot")
+    ap.add_argument("--video", required=True, help="path to input video file")
     ap.add_argument("--name", default="", help="shot name (defaults to video basename)")
     ap.add_argument("--points", type=int, default=350, help="number of seeded points")
     ap.add_argument("--fps", type=float, default=0.0, help="fps (0 = auto-detect)")
     ap.add_argument("--ckpt", default=os.path.join(ROOT, "weights", "jefftrack_reacq_stream.ckpt"),
                     help="checkpoint path for Jeff-Tracker")
-    ap.add_argument("--cached-ct", action="store_true",
-                    help="reuse cached CoTracker3 tracks if available")
+    ap.add_argument("--cached-baseline", action="store_true",
+                    help="reuse cached baseline tracks if available")
     ap.add_argument("--bidirectional", action="store_true",
                     help="enable forward + backward bidirectional tracking")
     ap.add_argument("--polish", action="store_true",
@@ -76,20 +76,21 @@ def main():
     q = np.concatenate([np.zeros((len(pts), 1), np.float32), pts], axis=1)
     print(f"[seed] {len(pts)} points seeded from frame 0")
 
-    ct_cache_file = os.path.join(out_dir, f"tracks_cotracker3_{shot_name}.npz")
-    if a.cached_ct and os.path.isfile(ct_cache_file):
-        print(f"\n--- 1. Loading cached CoTracker3 results from {ct_cache_file} ---")
+    bl_label = baseline_label()
+    ct_cache_file = os.path.join(out_dir, f"tracks_baseline_{shot_name}.npz")
+    if a.cached_baseline and os.path.isfile(ct_cache_file):
+        print(f"\n--- 1. Loading cached {bl_label} results from {ct_cache_file} ---")
         with np.load(ct_cache_file) as z:
             ct_tracks = z["tracks"]
             ct_vis = z["vis"]
             ct_conf = z["conf"]
             ct_dt = float(z["dt"]) if "dt" in z else 574.97
     else:
-        # 1. Run CoTracker3
-        print("\n--- 1. Running CoTracker3 ---")
-        ct_tracks, ct_vis, ct_conf, ct_dt = run_cotracker_external(frames, pts)
+        # 1. Run the baseline
+        print(f"\n--- 1. Running {bl_label} ---")
+        ct_tracks, ct_vis, ct_conf, ct_dt, _, _ = run_baseline(frames, pts)
         np.savez_compressed(ct_cache_file, tracks=ct_tracks, vis=ct_vis, conf=ct_conf, dt=ct_dt)
-    print(f"[cotracker3] {ct_dt:.2f}s  {ct_dt / T:.4f}s/frame  visible: {100.0 * ct_vis.mean():.1f}%")
+    print(f"[{bl_label}] {ct_dt:.2f}s  {ct_dt / T:.4f}s/frame  visible: {100.0 * ct_vis.mean():.1f}%")
 
     # 2. Run Jeff-Tracker (orientation aware model resolution)
     if Hw > Ww:
@@ -140,12 +141,12 @@ def main():
         render_w = 540
         render_h = int(round(Hw * (render_w / float(Ww))))
 
-    # Render 1: CoTracker3 MP4
-    ct_mp4 = os.path.join(out_dir, f"compare_{shot_name}_cotracker3.mp4")
-    print(f"\n[render] writing CoTracker3 overlay: {ct_mp4}")
+    # Render 1: baseline MP4
+    ct_mp4 = os.path.join(out_dir, f"compare_{shot_name}_baseline.mp4")
+    print(f"\n[render] writing {bl_label} overlay: {ct_mp4}")
     vw_ct = cv2.VideoWriter(ct_mp4, cv2.VideoWriter_fourcc(*"mp4v"), fps, (render_w, render_h))
     for t in range(T):
-        header = f"CoTracker3 | F:{first_frame + t} | Vis:{100.0 * ct_vis[t].mean():.0f}%"
+        header = f"{bl_label} | F:{first_frame + t} | Vis:{100.0 * ct_vis[t].mean():.0f}%"
         fr = draw_overlay(frames[t], ct_tracks, ct_vis, t, colors, header=header)
         vw_ct.write(cv2.resize(fr, (render_w, render_h), interpolation=cv2.INTER_AREA))
     vw_ct.release()
@@ -180,14 +181,14 @@ def main():
         vw_raw.write(cv2.resize(fr, (render_w, render_h), interpolation=cv2.INTER_AREA))
     vw_raw.release()
 
-    # Render 5: Side-by-Side MP4 (Left: CoTracker3, Right: Jeff-Tracker Matchmove Gap)
+    # Render 5: Side-by-Side MP4 (Left: baseline, Right: Jeff-Tracker Matchmove Gap)
     sbs_mp4 = os.path.join(out_dir, f"compare_{shot_name}_side_by_side.mp4")
     sbs_w = render_w * 2
     sbs_h = render_h
     print(f"[render] writing Side-by-Side comparison ({sbs_w}x{sbs_h}): {sbs_mp4}")
     vw_sbs = cv2.VideoWriter(sbs_mp4, cv2.VideoWriter_fourcc(*"mp4v"), fps, (sbs_w, sbs_h))
     for t in range(T):
-        h_ct = f"CoTracker3 | F:{first_frame + t}"
+        h_ct = f"{bl_label} | F:{first_frame + t}"
         fr_ct = draw_overlay(frames[t], ct_tracks, ct_vis, t, colors, header=h_ct)
         fr_ct_small = cv2.resize(fr_ct, (render_w, render_h), interpolation=cv2.INTER_AREA)
 
@@ -203,7 +204,7 @@ def main():
     vw_sbs.release()
 
     print("\n[done] All test runs completed successfully!")
-    print(f"  1. CoTracker3:              {ct_mp4}")
+    print(f"  1. Baseline:                {ct_mp4}")
     print(f"  2. Jeff-Tracker (Gap):       {jt_gap_mp4}")
     print(f"  3. Jeff-Tracker (Camera):    {jt_rigid_mp4}")
     print(f"  4. Jeff-Tracker (Raw):       {jt_raw_mp4}")

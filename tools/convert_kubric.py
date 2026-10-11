@@ -1,9 +1,9 @@
-"""Meta's CoTracker3_Kubric shards -> a compact training cache, 585 GB -> ~45 GB.
+"""Meta AI's Kubric point-tracking shards -> a compact training cache, 585 GB -> ~45 GB.
 
-Source: `facebook/CoTracker3_Kubric` on Hugging Face, **Apache-2.0** (verified on the
+Source: Meta AI's Kubric release on Hugging Face (dataset ID below), **Apache-2.0** (verified on the
 dataset page and the HF API `cardData.license`, 2026-09-21). Worth restating because it is
-the whole reason this folder exists: CoTracker3's *code and weights* are CC-BY-NC and
-cannot ship, but the *shots Meta trained it on* are Apache-2.0 and can. See ../../LICENSES.md.
+the whole reason this folder exists: the *code and weights* of the project these shots
+shipped with are non-commercial and cannot ship, but the *shots* are Apache-2.0 and can. See ../../LICENSES.md.
 
 One `NNNN.tar.gz` is one shot: 120 frames at 512x512, 32,768 tracked points, a depth pass
 and a ground-truth camera. Unpacked that is ~460 MB per shot, and 1,954 shots do not fit on
@@ -51,7 +51,7 @@ random-crop augmentation still has something to crop from. That decision is the 
 cache is 45 GB rather than 12, and it is what stops the source archives being load-bearing.
 
     hf download facebook/CoTracker3_Kubric --repo-type dataset \
-        --local-dir datasets/CoTracker3_Kubric
+        --local-dir datasets/kubric_meta
     python tools/convert_kubric.py --selftest   # no dataset needed, seconds
     python tools/convert_kubric.py --limit 4    # try four shots
     python tools/convert_kubric.py              # the real run, ~4 s per shot
@@ -78,7 +78,7 @@ import numpy as np  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)          # the repo root, one level up
-DEFAULT_SRC = os.path.join(ROOT, "datasets", "CoTracker3_Kubric")
+DEFAULT_SRC = os.path.join(ROOT, "datasets", "kubric_meta")
 DEFAULT_OUT = os.environ.get(
     "JEFFTRACK_KUBRIC_CACHE", os.path.join(ROOT, "datasets", "kubric_cache"))
 
@@ -540,7 +540,7 @@ def main() -> int:
         return 2
 
     src_bytes = sum(os.path.getsize(os.path.join(a.src, t)) for t in tars)
-    print("=== CoTracker3_Kubric -> training cache ===")
+    print("=== Kubric (Meta AI release) -> training cache ===")
     print("archives   : {}  ({:.1f} GB)".format(len(tars), src_bytes / 1e9))
     print("out        : {}".format(a.out))
     print("points/shot: {}   min visible frames: {}".format(a.points, a.min_visible))

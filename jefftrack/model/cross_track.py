@@ -7,16 +7,16 @@ locotrack_model.py:891 --
     res = self.torch_pips_mixer(x)
 
 -- tracks are folded into the batch dimension, so the temporal transformer never sees more
-than one trajectory at a time. That is the structural difference from CoTracker, and it is
+than one trajectory at a time. That is the structural difference from the published recipe, and it is
 what the occlusion measurement in FINDINGS.md reports from the other end: only 5.9% of
 ground-truth-occluded frames get a position at all, because a point with nothing to look at
 has nothing to go on. A point that is hidden RIGHT NOW is not unknowable if fifty of its
 neighbours are visible and moving rigidly with it.
 
-Written from the description in the CoTracker3 paper (arXiv 2410.11831), which reports
+Written from the description in Karaev et al. 2024 (see NOTICE), which reports
 cross-track attention as worth +5.1 delta_avg on occluded points against +1.6 on visible
-ones (Table 3). No code, weights, or tensors here derive from the CoTracker repository,
-which is CC-BY-NC-4.0 -- see ../../LICENSES.md. Architecture is not copyrightable; source
+ones (Table 3). No code, weights, or tensors here derive from any implementation of it
+-- see ../../LICENSES.md. Architecture is not copyrightable; source
 code is.
 
 Shape of the thing:
@@ -57,7 +57,7 @@ The block is not short of neighbours. It is short of a way to remember them. A p
 is hidden at frame t has an uninformative token at frame t, and a per-frame summary of its
 neighbours is built from that same frame -- so the one thing that could place it, *where
 the group has been heading over the last twenty frames*, is exactly what a static proxy
-cannot hold. CoTracker3 gets this from virtual track tokens that ride through its time
+cannot hold. The published recipe gets this from virtual track tokens that ride through its time
 attention with the real ones; carry_state is that, on LocoTrack's mixer.
 """
 from __future__ import annotations

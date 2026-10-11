@@ -1,8 +1,8 @@
 """Three engines, one bench, identical footage and identical seeds.
 
-Jeff-Tracker, TAPNext++ (what the bot ships today) and CoTracker3 (the target), run over
+Jeff-Tracker, TAPNext++ (what the bot ships today) and an external baseline tracker, run over
 the same synthetic occlusion bench, which has EXACT ground truth for every point on every
-frame. That is the difference between this and `smoke_ct3_vs_dbt.py`: the smoke test runs
+frame. That is the difference between this and the real-plate smoke test: the smoke test runs
 on real plates with no truth and can only report self-consistency, so it can say the two
 disagree but never which one is right. Here it can.
 
@@ -15,7 +15,7 @@ What is held equal, deliberately:
 
 What is NOT held equal, and must be read with the table: each engine runs at its own
 native resolution, because that is the configuration each one actually ships as.
-CoTracker3 resizes internally to 384x512 regardless of what it is fed; Jeff-Tracker runs at
+The baseline resizes internally to 384x512 regardless of what it is fed; Jeff-Tracker runs at
 256x256 because 384x680 produced confident 1000 px errors (see FINDINGS.md); TAPNext runs
 at whatever BTR_TAPNEXT_IMG resolves to. A resolution-matched pass is a separate
 experiment, not this one -- the numbers below say what each product does, not which
@@ -32,8 +32,8 @@ baseline the gate moves the worst re-acquire from 429.55 px to 8.69 px while hid
 0.6% of the frames. Quoting either number without the other overstates or understates the
 thing an artist actually has to clean up.
 
-CoTracker3 is CC-BY-NC-4.0 and is used here as a measurement target only -- see
-LICENSES.md. No CoTracker output trains, tunes or selects anything.
+The baseline is non-commercially licensed and is used here as a measurement target only --
+see LICENSES.md. No baseline output trains anything.
 
     runtime\\python311\\python.exe experiments\\Jeff-Tracker\\bench3.py ^
         --shot bench\\synth\\lab02_occ
@@ -65,13 +65,11 @@ from jefftrack.io import (  # noqa: E402
     list_frames, read_frame, seed_corners, write_3de)
 import score_occlusion as SO  # noqa: E402
 
-# CoTracker3 is CC-BY-NC-4.0 and is NOT vendored, downloaded or redistributed by this
-# repository -- see docs/LICENSES.md. It is loaded from wherever the user already has it,
-# named by environment variable, and is used to produce comparison NUMBERS only. Without
-# these set, the cotracker3 engine simply reports that it is unavailable and the other
-# engines still run.
-CT_CODE = os.environ.get("JT_COTRACKER_DIR", "")
-CT_CKPT = os.environ.get("JT_COTRACKER_CKPT", "")
+# The baseline tracker is NOT vendored, downloaded or redistributed by this repository --
+# see docs/LICENSES.md. It is reached through an adapter file the user names in
+# JT_BASELINE_ADAPTER and is used to produce comparison NUMBERS only. Without it set, the
+# baseline engine simply reports that it is unavailable and the other engines still run.
+import external_baseline as EB  # noqa: E402
 
 # The locked shot set. Every phase re-runs exactly these, so a number from Phase 3 can be
 # put directly beside the same number from Phase 0. Adding a bench is allowed; removing or
@@ -147,54 +145,16 @@ def run_tapnext(frames, pts):
     return tracks, vis, vis.astype(np.float32), dt, peak, res
 
 
-def run_cotracker3(frames, pts, max_side=1024):
-    """CoTracker3 offline through its own predictor, loaded from JT_COTRACKER_DIR.
+def run_baseline_engine(frames, pts):
+    """The external baseline through its adapter (tools/external_baseline.py).
 
-    Query frame 0, so backward_tracking has nothing to add and is left off. The predictor
-    resizes internally to 384x512 whatever it is fed, so `max_side` only bounds what is
-    uploaded to the GPU, not what the model sees.
+    Query frame 0. Its visibility is a boolean, so conf is that boolean -- there is no
+    continuous confidence to hand back.
     """
-    if not CT_CODE or not os.path.isdir(CT_CODE):
-        raise RuntimeError(
-            "CoTracker3 is not set up here, by design -- it is not vendored. To include it "
-            "in the comparison, point JT_COTRACKER_DIR at a checkout of facebookresearch/"
-            "co-tracker and JT_COTRACKER_CKPT at its scaled_offline checkpoint. Note the "
-            "CC-BY-NC-4.0 licence on both (docs/LICENSES.md).")
-    if not os.path.isfile(CT_CKPT):
-        raise RuntimeError("JT_COTRACKER_CKPT does not point at a file: {}".format(CT_CKPT))
-    if CT_CODE not in sys.path:
-        sys.path.insert(0, CT_CODE)
-    from cotracker.predictor import CoTrackerPredictor  # noqa: PLC0415
-
-    T, H, W = frames.shape[:3]
-    scale = min(1.0, float(max_side) / float(max(W, H)))
-    w, h = int(round(W * scale)), int(round(H * scale))
-
-    model = CoTrackerPredictor(checkpoint=CT_CKPT, offline=True, v2=False, window_len=60)
-    model = model.cuda().eval()
     free_vram()
-
-    buf = np.empty((T, h, w, 3), np.uint8)
-    for i, fr in enumerate(frames):
-        small = cv2.resize(fr, (w, h), interpolation=cv2.INTER_AREA) if scale != 1.0 else fr
-        buf[i] = small[:, :, ::-1]
-    video = torch.from_numpy(buf).permute(0, 3, 1, 2)[None].float().cuda()
-
-    q = np.concatenate([np.zeros((len(pts), 1), np.float32), pts * scale],
-                       1).astype(np.float32)
-    queries = torch.from_numpy(q)[None].cuda()
-    t0 = time.time()
-    with torch.no_grad():
-        tr, vs = model(video, queries=queries, backward_tracking=False)
-    dt = time.time() - t0
-    tracks = tr[0].detach().cpu().numpy() / scale          # back to fed pixels
-    vis = vs[0].detach().cpu().numpy().astype(bool)
-    peak = torch.cuda.max_memory_allocated() / 1e9
-    del model, video, queries, tr, vs
+    out = EB.run_baseline(frames, pts)
     free_vram()
-    # CoTracker's visibilities are already thresholded at 0.9 inside the predictor, so
-    # there is no continuous confidence to hand back. conf is the boolean, stated as such.
-    return tracks, vis, vis.astype(np.float32), dt, peak, "384x512 (internal)"
+    return out
 
 
 def parse_engine(token, default_res, default_chunk):
@@ -272,8 +232,8 @@ def run_bench(shot_dir, engines, points, work_width, jt_ckpt, jt_arch, jt_res, o
                                     window_overlap=spec.get("ov"))
             elif eng_name == "tapnext":
                 out = run_tapnext(frames, pts)
-            elif eng_name == "cotracker3":
-                out = run_cotracker3(frames, pts)
+            elif eng_name == "baseline":
+                out = run_baseline_engine(frames, pts)
             else:
                 raise SystemExit("[ERROR] unknown engine {}".format(eng_name))
         except Exception as exc:  # noqa: BLE001
@@ -320,11 +280,11 @@ def score_all(shot_dir, name, results, reacq):
 
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description="Jeff-Tracker vs TAPNext++ vs CoTracker3 on a truth bench")
+        description="Jeff-Tracker vs TAPNext++ vs a baseline tracker on a truth bench")
     ap.add_argument("--shot", default=None, help="a bench dir under bench/synth")
     ap.add_argument("--all", action="store_true",
                     help="run the locked bench set: " + ", ".join(LOCKED_BENCHES))
-    ap.add_argument("--engines", default="jefftrack,tapnext,cotracker3")
+    ap.add_argument("--engines", default="jefftrack,tapnext,baseline")
     ap.add_argument("--points", type=int, default=600)
     ap.add_argument("--work-width", type=int, default=1280)
     ap.add_argument("--ckpt", default=DEFAULT_JT_CKPT)

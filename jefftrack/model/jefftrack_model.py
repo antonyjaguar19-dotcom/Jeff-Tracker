@@ -18,7 +18,7 @@ Two properties are load-bearing and both are checked by ../../check_identity.py:
 
 Scope limit worth knowing before reading any result: LocoTrack chunks queries
 (`query_chunk_size`, default 64), so cross-track attention sees the tracks within one
-chunk, not every track in the shot. CoTracker attends across all tracks in its window.
+chunk, not every track in the shot. The published recipe attends across all tracks in its window.
 Raise query_chunk_size to widen it, at the usual VRAM cost.
 """
 from __future__ import annotations
@@ -149,7 +149,7 @@ class JeffTracker(LocoTrack):
             num_heads=cross_heads, zero_init=zero_init, carry_state=carry_state)
 
     def _add_pyramid_levels(self, extra: int, zero_init: bool = True) -> None:
-        """Give the correlation pyramid `extra` more levels. CoTracker3 runs four.
+        """Give the correlation pyramid `extra` more levels. The published recipe runs four.
 
         The vendor already accepts `pyramid_level` and already builds the extra grids --
         an `avg_pool3d` of the level below, re-using the same query and support features

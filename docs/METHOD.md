@@ -246,8 +246,9 @@ frame, mediated by 16 learned proxy tokens so cost is O(N·K) rather than O(N²)
 a set, not a sequence, so there is no positional encoding and no causal mask — either would
 assert an order between track 7 and track 8 that does not exist.
 
-Written from the description in a published paper (arXiv 2410.11831); see NOTICE. No file,
-function or weight tensor is derived from any third-party implementation of it.
+Written from the description in Karaev et al., arXiv:2410.11831 (2024); see NOTICE. No file,
+function or weight tensor is derived from any third-party implementation of it. Where this
+document says "the published recipe", it means that paper.
 
 `jefftrack/model/jefftrack_model.py` re-parents LocoTrack's own `input_proj`, `transformer` and
 `output_proj` — the same module objects, not rebuilt — and unrolls the vendor's layer loop
@@ -421,7 +422,7 @@ selection on the test set, and no number here is obtained that way.
 
 ## Closing the occlusion gap: four attempts, one kept
 
-CoTracker3's remaining advantage over this model is one column: accuracy **while a point is
+The baseline tracker's remaining advantage over this model is one column: accuracy **while a point is
 hidden**. At matched resolution Jeff-Tracker takes visible localisation and re-acquisition;
 occluded-frame error is the gap. Four changes were built against that, each one flag apart
 from its control, each trained for 20,000 steps on the same data under the same schedule,
@@ -490,7 +491,7 @@ through as a separate call on the same layer.
 
 The position loss used Huber for both populations. Huber is quadratic below `delta`, so an
 occluded point sitting 2–3 px out — exactly the band this model loses in — contributes
-`dist²/2` and is barely corrected. CoTracker3's recipe uses Huber on visible and plain L1 on
+`dist²/2` and is barely corrected. The published recipe uses Huber on visible and plain L1 on
 invisible. Measured on the loss itself, occluded population:
 
 | true error | Huber | L1 | ratio |
@@ -528,7 +529,7 @@ Falsifiable: the effect should shrink as the occluded share goes to zero.
 
 ### 3. A fourth correlation level (`--pyramid-level 1`) — REJECTED
 
-CoTracker3 runs four correlation levels; LocoTrack ships three. Token width 854 → 1110. The
+The published recipe runs four correlation levels; LocoTrack ships three. Token width 854 → 1110. The
 new channels enter the mixer at zero weight and the extra CMDTop trains with them.
 
 It fit the training data **best** of the three runs — final loss 1.9611 against 2.1811 and
@@ -551,7 +552,7 @@ Third time this model has rejected the same idea: a run at the higher feature la
 rejected earlier, `384x680` produced confident 1000 px errors, and now a fourth level.
 Working conclusion: **on this architecture, additional correlation capacity is absorbed as a
 better fit to the training distribution and does not reach the benches.** Worth re-testing
-with real pseudo-labelled data behind it, since CoTracker3 runs four levels *and* a second
+with real pseudo-labelled data behind it, since the published recipe runs four levels *and* a second
 stage over 15,000 videos.
 
 ### What the four together establish
@@ -564,13 +565,13 @@ stage over 15,000 videos.
 | 3 | fourth correlation level | 266,752 | **rejected** |
 
 The change that worked changed the **objective**. Both architecture changes did nothing, and
-the one that added capacity hurt. Against CoTracker3's 1.69–1.99 occluded on the card benches
+the one that added capacity hurt. Against the baseline's 1.69–1.99 occluded on the card benches
 and 1.708 on the depth bench, this model sits at 3.040 and 2.120 — routes 1b and 3 moved that
 by nothing.
 
 Stated plainly because it is the most useful thing these runs produced: **the remaining gap
 is not going to be closed by another flag on this architecture.** What is still structurally
-different is that CoTracker3's joint attention lives inside its own space-time block stack
+different is that the published recipe's joint attention lives inside its own space-time block stack
 over all 384–768 points at once, where this model's is a zero-initialised residual bolted
 around a refinement mixer that is per-track by construction. That is a refinement-network
 rewrite, not a setting.
@@ -587,13 +588,13 @@ every vertex is arithmetic on the bench's known homography — and the scorer ga
 point-in-polygon test. Control passes at 0.00000 px.
 
 It was built expecting flat cards to have been flattering the model. They were not: depth
-occluders are *easier* for this model (3.186 → 2.314) and unchanged for CoTracker3 (1.693 →
+occluders are *easier* for this model (3.186 → 2.314) and unchanged for the baseline (1.693 →
 1.708). The gap narrows from 1.88x to 1.35x and does not close, on a bench built to be fairer
 to it — which is the strongest evidence available that the occluded gap is a property of the
 model rather than of the occluder geometry.
 
 **Pseudo-labelling on real plates** (`tools/make_pseudo_labels.py`, `tools/train_stage2.py`).
-The second half of CoTracker3's recipe, with commercially-clean teachers. One teacher per
+The second half of the published recipe, with commercially-clean teachers. One teacher per
 sample drawn at random rather than averaged; support points tracked jointly and discarded;
 queries from a detector rather than a grid, with a frame that cannot supply them dropped
 instead of padded; teacher visibility hardened at 0.9; labels gated by forward-backward

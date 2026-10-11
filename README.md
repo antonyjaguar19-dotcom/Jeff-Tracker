@@ -49,6 +49,8 @@ Full-resolution production plates: portrait footage, multi-window bicycle motion
 | ↳ *Emergence Re-acquisition* | | $136.72\text{ px}$ (stuck to dancer) | **$21.35\text{ px}$** (snaps to wall) | **$6.4\times$ tighter** |
 | ↳ *Phantom Floating Points* | | Present | **$0$ (Matchmove Gapping)** | **Eliminated** |
 
+<img src="assets/benchmark_real_plates.png" width="100%" alt="Real production plates: speed-up, trajectory jitter and re-acquisition, Jeff-Tracker against the baseline, winner marked on each panel">
+
 <div align="center">
 <img src="assets/demo_smoke_side_by_side.gif" width="100%" alt="Volumetric smoke: baseline tracker vs Jeff-Tracker">
 <p><em>Volumetric smoke: the baseline (left) bounces on turbulent smoke (13.3 px/f²). Jeff-Tracker (right) gaps occluded frames and holds visible points steady (1.9 px/f²).</em></p>
@@ -97,6 +99,8 @@ Four synthetic occlusion shots with exact homography ground truth, the same 600 
 | **Re-acquisition, mean (ungated)** | **0.85 – 1.06 px** | 1.36 – 1.62 px | 2.45 – 2.54 px | **Jeff-Tracker, every bench** |
 | **Occluded error, mean (ungated)** | 2.62 – 3.82 px | **1.69 – 1.99 px** | 2.58 – 2.83 px | Baseline |
 
+<img src="assets/benchmark_synthetic.png" width="100%" alt="Synthetic occlusion benches: Jeff-Tracker, baseline and TAPNext++ on four error metrics, winner marked on each panel">
+
 ### Held-out Kubric ground truth, against the base model
 
 Kubric shard 0007, held out of training (`--holdout 1`). This measures exactly what this project's training added on top of LocoTrack-B.
@@ -108,6 +112,8 @@ Kubric shard 0007, held out of training (`--holdout 1`). This measures exactly w
 | **Visible error, median** | **0.727 px** | 0.835 px | **−12.9%** |
 | **Trajectory jitter** | **1.259 px/f²** | 1.910 px/f² | **−34.1%** |
 
+<img src="assets/benchmark_heldout.png" width="100%" alt="Held-out Kubric ground truth: Jeff-Tracker against its LocoTrack-B base on four metrics, winner marked on each panel">
+
 ### TAP-Vid DAVIS (general benchmark)
 
 | | AJ | δ_avg | OA |
@@ -116,6 +122,8 @@ Kubric shard 0007, held out of training (`--holdout 1`). This measures exactly w
 | LocoTrack-B (base) | 62.6 | 74.7 | **86.9** |
 
 The occlusion fine-tune holds level on the general benchmark. Its gains are on occlusion and re-acquisition, where matchmove needs them.
+
+The charts are generated from [`docs/benchmark_summary.json`](docs/benchmark_summary.json), which names the source of every number: `python tools/plot_benchmark_summary.py`.
 
 ---
 

@@ -119,6 +119,19 @@ This is a display choice, not a claim about the model. It still emits those posi
 coverage figures in [`../docs/METHOD.md`](../docs/METHOD.md) are what quantify how often it
 declines to commit.
 
+## README benchmark charts
+
+`benchmark_real_plates.png`, `benchmark_synthetic.png` and `benchmark_heldout.png` are
+rendered by `tools/plot_benchmark_summary.py` from
+[`../docs/benchmark_summary.json`](../docs/benchmark_summary.json). Every panel in that file
+names the document or result file its numbers come from, and per-bench values are averaged
+by the script. Each panel states its winner, including the one the baseline wins. Same
+validated series colours as the score sheets below. Measurements only, no footage.
+
+```bash
+python tools/plot_benchmark_summary.py
+```
+
 ## Comparison figures
 
 The matched-coverage figure and the two comparison score sheets are generated, not drawn,

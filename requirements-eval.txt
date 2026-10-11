@@ -10,3 +10,6 @@ mediapy
 scipy
 tensorflow-cpu
 tensorflow_datasets
+
+# README charts and benchmark score sheets (tools/plot_benchmark_summary.py, tools/score_sheet.py)
+matplotlib

@@ -1,7 +1,11 @@
-# Jeff-Tracker against CoTracker3 and TAPNext++, on exact ground truth
+# Jeff-Tracker against a baseline tracker and TAPNext++, on exact ground truth
 
-Read [`LICENSES.md`](LICENSES.md) first — CoTracker3 is CC-BY-NC-4.0, it is not vendored or
-redistributed here, and what appears below is measurement, not code or weights.
+**Baseline** throughout this document is a widely used offline transformer point tracker,
+run unmodified at its default offline configuration from a separate local install. It is
+distributed under a non-commercial licence, so none of its code or weights are vendored or
+redistributed here, and what appears below is measurement only — see
+[`LICENSES.md`](LICENSES.md). **TAPNext++** (Google DeepMind, Apache-2.0) is the second
+reference. **LocoTrack-B** is the base Jeff-Tracker is fine-tuned from.
 
 Everything in this document is reproducible from `tools/bench3.py`, `tools/score_sheet.py`
 and `tools/render_bench3.py` against benches `tools/make_occlusion_bench.py` builds.
@@ -16,7 +20,7 @@ and `tools/render_bench3.py` against benches `tools/make_occlusion_bench.py` bui
 | benches | four synthetic occlusion shots, exact homography truth for every point on every frame, occluder cover 10.5% / 17.8% / 21.5% / 24.4% |
 
 What is **not** held equal, and why it matters more than it sounds: each engine runs at its
-own native resolution, because that is the configuration each ships as. CoTracker3 resizes
+own native resolution, because that is the configuration each ships as. The baseline resizes
 internally to 384×512 whatever it is fed. Jeff-Tracker's default is 256×256. That is roughly
 three times the pixels, and correcting it changes the result — see
 [At matched resolution](#at-matched-resolution).
@@ -34,7 +38,7 @@ tracker. These are ~1.2% of visible samples and they carried the entire tail:
 |---|---|---|
 | Jeff-Tracker | 389.30 px | **16.86 px** |
 | TAPNext++ | 79.96 px | **28.14 px** |
-| CoTracker3 | 6.87 px | **5.69 px** |
+| Baseline | 6.87 px | **5.69 px** |
 
 **Re-acquisition is scored ungated.** `write_3de` drops frames the model is unsure about,
 so a track that returns from an occlusion *wrong and unsure* is discarded before it is ever
@@ -68,7 +72,7 @@ the second exposes failures its exporter was hiding.
 
 Ungated, truth on-plate. Lower is better throughout.
 
-| bench | | Jeff-Tracker 256×256 | TAPNext++ | CoTracker3 |
+| bench | | Jeff-Tracker 256×256 | TAPNext++ | Baseline |
 |---|---|---|---|---|
 | lab02_occ | visible median | **1.163** | 2.454 | 1.171 |
 | | occluded mean | 3.764 | 2.578 | **1.693** |
@@ -84,7 +88,7 @@ Ungated, truth on-plate. Lower is better throughout.
 | | re-acquire | 1.842 | 2.535 | **1.525** |
 
 At its default resolution Jeff-Tracker takes the visible median on all four benches and
-loses occlusion and re-acquisition to CoTracker3 on all four.
+loses occlusion and re-acquisition to the baseline on all four.
 
 **TAPNext++ is not occlusion-robust, it is uniformly less precise.** Its occluded error sits
 at or below its own visible error on three of the four — occlusion barely registers because
@@ -93,7 +97,7 @@ up under occlusion".
 
 ## At matched resolution
 
-Jeff-Tracker at CoTracker3's own 384×512. Same weights, same benches, same seeds — only
+Jeff-Tracker at the baseline's own 384×512. Same weights, same benches, same seeds — only
 `--model-res` moves.
 
 | bench | visible median | visible mean | re-acquire | occluded mean |
@@ -105,23 +109,23 @@ Jeff-Tracker at CoTracker3's own 384×512. Same weights, same benches, same seed
 
 Visible error and re-acquisition roughly **halve** on every bench.
 
-Against CoTracker3 at that resolution:
+Against the baseline at that resolution:
 
-| | Jeff-Tracker 384×512 | CoTracker3 | |
+| | Jeff-Tracker 384×512 | Baseline | |
 |---|---|---|---|
 | visible median | **0.615 – 0.657** | 1.171 – 1.297 | Jeff-Tracker, ~2× |
 | visible mean | **0.681 – 0.759** | 1.252 – 1.373 | Jeff-Tracker, ~1.8× |
 | re-acquire | **0.854 – 1.056** | 1.363 – 1.620 | Jeff-Tracker, every bench |
-| occluded mean | 2.616 – 3.815 | **1.693 – 1.987** | CoTracker3, ~1.5× |
-| visible worst | 6.82 – 91.78 | **5.38 – 5.83** | CoTracker3, decisively |
+| occluded mean | 2.616 – 3.815 | **1.693 – 1.987** | Baseline, ~1.5× |
+| visible worst | 6.82 – 91.78 | **5.38 – 5.83** | Baseline, ungated (see matched coverage) |
 
-## What CoTracker3 still does better, stated plainly
+## What the baseline still does better, stated plainly
 
 **Occluded accuracy, about 1.5×, on every bench.** Resolution narrowed this from ~2.2× and
 did not close it. This is the real remaining gap and it is the one cross-track attention was
 added to attack.
 
-**The tail, read ungated.** CoTracker3's worst visible error is 5.4–5.8 px on every bench —
+**The tail, read ungated.** The baseline's worst visible error is 5.4–5.8 px on every bench —
 a flat line across four independent occluder layouts — while Jeff-Tracker at 384×512 goes
 6.82 / 30.89 / 91.78 / 19.87. **But this row is not coverage-fair and the conclusion
 reverses once it is; see [At matched coverage](#at-matched-coverage-the-fair-tail-comparison).**
@@ -141,7 +145,7 @@ resolution halves the typical error and multiplies the worst one.
 The tail numbers above are **not coverage-fair**, and correcting that changes the
 conclusion.
 
-CoTracker3 thresholds visibility at 0.9 **inside its own predictor**, so the positions it
+The baseline thresholds visibility at 0.9 **inside its own predictor**, so the positions it
 hands back are already gated. Jeff-Tracker's were raw. A tracker that declines to answer on
 its least certain few percent of frames will always look steadier than one that answers on
 everything — that is a reporting difference, not an accuracy difference.
@@ -154,27 +158,25 @@ engine:
 |---|---|---|---|---|---|
 | lab02_occ | Jeff-Tracker 256×256 | 1.277 | 1.144 | 3.68 | 6.15 |
 | | **Jeff-Tracker 384×512** | **0.665** | **0.605** | **1.83** | **3.65** |
-| | CoTracker3 | 1.234 | 1.156 | 3.07 | 5.38 |
+| | Baseline | 1.234 | 1.156 | 3.07 | 5.38 |
 | | TAPNext++ | 2.665 | 2.451 | 10.43 | 18.65 |
 | occ11 | **Jeff-Tracker 384×512** | **0.697** | **0.630** | **1.92** | **4.29** |
-| | CoTracker3 | 1.297 | 1.226 | 3.20 | 5.38 |
+| | Baseline | 1.297 | 1.226 | 3.20 | 5.38 |
 | occ12 | **Jeff-Tracker 384×512** | **0.719** | **0.638** | **2.12** | **4.11** |
-| | CoTracker3 | 1.330 | 1.241 | 3.41 | 5.42 |
+| | Baseline | 1.330 | 1.241 | 3.41 | 5.42 |
 | occ13 | **Jeff-Tracker 384×512** | **0.718** | **0.643** | **2.06** | **4.30** |
-| | CoTracker3 | 1.356 | 1.282 | 3.36 | 5.83 |
-
-![At matched coverage](../assets/coverage_matched.png)
+| | Baseline | 1.356 | 1.282 | 3.36 | 5.83 |
 
 **At matched coverage Jeff-Tracker at 384×512 takes every column on every bench, including
 the maximum** — roughly 1.9× on the mean, 2× on the median, and 3.65–4.30 px worst against
 5.38–5.83.
 
-Two things stated against interest. For engines whose confidence is a boolean — CoTracker3
+Two things stated against interest. For engines whose confidence is a boolean — the baseline
 and TAPNext++ — there is no ordering to exploit, so their 96% is an arbitrary subset rather
 than their best; that works against Jeff-Tracker, not for it, and a better selection rule on
 their side could only improve their rows. And the whole comparison is **visible frames
 only**: occluded accuracy is measured on frames the point is hidden, a visible-frame
-coverage match cannot move it, and **CoTracker3 remains about 1.5× better there**. That gap
+coverage match cannot move it, and **the baseline remains about 1.5× better there**. That gap
 is real and is not addressed by anything in this section.
 
 Reproduce with:
@@ -191,11 +193,11 @@ Averaged over the four benches, 100 frames each, 600 tracks, on one 16 GB A4000.
 |---|---|---|
 | Jeff-Tracker 256×256 | 0.045 | **2.80 GB** |
 | Jeff-Tracker 384×512 | 0.070 | 10.19 GB |
-| CoTracker3 | **0.040** | 9.95 GB |
+| Baseline | **0.040** | 9.95 GB |
 | TAPNext++ | 0.135 | 1.78 GB |
 
 The fair comparison is also the expensive one: at matched resolution Jeff-Tracker sits in
-CoTracker3's VRAM bracket. Any leaner-than-CoTracker3 claim is a claim about running
+the baseline's VRAM bracket. Any leaner-than-baseline claim is a claim about running
 smaller, not about the architecture.
 
 ## Coverage, which is the opposite of what it looks like
@@ -203,22 +205,22 @@ smaller, not about the architecture.
 Percentage of ground-truth-occluded frames the engine puts a position on at all, at the
 export gate:
 
-| bench | Jeff-Tracker | TAPNext++ | CoTracker3 |
+| bench | Jeff-Tracker | TAPNext++ | Baseline |
 |---|---|---|---|
 | lab02_occ | 6.30 | 3.03 | **0.14** |
 | occ11 | 8.76 | 3.55 | **0.29** |
 | occ12 | 7.17 | 2.93 | **0.21** |
 | occ13 | 7.10 | 2.22 | **0.33** |
 
-CoTracker3 does **not** carry points through occlusions in export terms — it marks them
+The baseline does **not** carry points through occlusions in export terms — it marks them
 invisible more aggressively than either of the others. What differs is that the positions it
 does emit while hidden are right.
 
-This matters for anyone reading "CoTracker tracks through occlusions" as a capability gap:
+This matters for anyone reading "the baseline tracks through occlusions" as a capability gap:
 the gap is accuracy while hidden, not willingness to emit. Coverage is a behaviour, not a
 score — an engine that gaps everything scores a perfect occluded error.
 
-CoTracker3 also drops the **most** post-occlusion frames at the gate (4.0–11.5%, against
+The baseline also drops the **most** post-occlusion frames at the gate (4.0–11.5%, against
 Jeff-Tracker's 0.5–3.1%), so scoring re-acquisition from exports alone would have flattered
 it hardest. This is why the ungated path exists.
 
@@ -245,10 +247,13 @@ against 0.070, same VRAM, same numbers.
 ## Reproducing this
 
 ```bash
-# CoTracker3 is not vendored. Point at your own checkout to include it; omit to compare
-# Jeff-Tracker against itself and TAPNext++ only.
-export JT_COTRACKER_DIR=/path/to/co-tracker
-export JT_COTRACKER_CKPT=/path/to/cotracker3_scaled_offline.pth
+# The baseline is not vendored. Point JT_BASELINE_ADAPTER at a Python file that defines
+#   track(frames, points) -> (tracks, visibility)
+# frames: (T, H, W, 3) uint8 BGR; points: (N, 2) [x, y] plate pixels, queried on frame 0;
+# tracks: (T, N, 2) [x, y] plate pixels; visibility: (T, N) bool.
+# Full contract in tools/external_baseline.py.
+# Leave it unset to compare Jeff-Tracker against itself and TAPNext++ only.
+export JT_BASELINE_ADAPTER=/path/to/my_baseline_adapter.py
 
 python tools/make_occlusion_bench.py --src bench/synth/lab02 --out bench/synth/occ_s11 \
     --occluders 8 --seed 11
@@ -374,30 +379,28 @@ disagree, and picking one would be choosing the benchmark after seeing the resul
 
 ---
 
-## Production Matchmove Shootout: Surpassing CoTracker3
+## Production Matchmove Shootout
 
-Following targeted streaming training on Meta's Apache-2.0 Kubric dataset with our **Re-acquisition Surge Loss ($\mathcal{L}_{\text{reacq}}$)**, **$L_1$ occlusion norm**, and the **4-stage matchmove precision pipeline**, Jeff-Tracker comprehensively outperforms CoTracker3 across all visual effects matchmove criteria:
+Following streaming training on Apache-2.0 Kubric point-tracking data with the **Re-acquisition Surge Loss ($\mathcal{L}_{\text{reacq}}$)**, the **$L_1$ occlusion norm**, and the **4-stage matchmove precision pipeline**, Jeff-Tracker against the baseline on real plates, and against its own base model on held-out ground truth:
 
 ### 1. Head-to-Head Comparison Scorecard
 
-| Area | CoTracker3 Baseline | Jeff-Tracker Refined Stream | Advantage / Verdict |
+| Area | Reference | Jeff-Tracker | Advantage / Verdict |
 |---|---|---|---|
-| **Occlusion Gapping** | Forces guesses; drags points across air | **Clean Matchmove Gapping** | **Jeff-Tracker (0 floating points)** |
-| **Emergence Re-acquisition** | 136.7 px (stuck to moving actor) | **21.3 px** (snaps to true wall landmark) | **Jeff-Tracker (6.4× tighter)** |
-| **Re-acquisition (Held-Out GT)** | 11.50 px | **9.26 px (Mean) / 0.604 px (Median)** | **Jeff-Tracker (19.5% tighter / Sub-pixel)** |
-| **Occlusion Drift (Held-Out GT)** | 37.59 px | **17.19 px** | **Jeff-Tracker (54.3% less drift)** |
-| **Volumetric Smoke Jitter (4K)** | 15.002 px/f² (Violent bouncing) | **1.316 px/f²** | **Jeff-Tracker (11.4× smoother)** |
-| **Volumetric Smoke Jitter (1080p)** | 13.286 px/f² | **1.904 px/f²** | **Jeff-Tracker (7.0× smoother)** |
-| **Sub-Pixel Native Polish** | 0.5 – 1.5 px (Resampling blur) | **< 0.1 px** (Native Pyramidal LK) | **Jeff-Tracker (5× sub-pixel lock)** |
-| **Inference Speed (4K 783f Plate)** | 1830.68s (30.5 min) | **89.11s (1.48 min)** | **Jeff-Tracker (20.5× faster)** |
-| **Inference Speed (1080p 233f Plate)**| 222.44s (3.7 min) | **8.78s (0.15 min)** | **Jeff-Tracker (25.3× faster)** |
-| **Training Memory Footprint** | Unbounded (> 20 GB) | **< 1.5 GB (Streaming purge)** | **Jeff-Tracker (Strictly bounded)** |
-| **Commercial Freedom** | CC-BY-NC-4.0 (Non-commercial) | **Apache-2.0 (100% Commercial Clean-Room)** | **Jeff-Tracker (Full rights)** |
+| **Occlusion Gapping** | Baseline: drags points across air | **Clean Matchmove Gapping** | **Jeff-Tracker (0 floating points)** |
+| **Emergence Re-acquisition** | Baseline: 136.7 px (stuck to moving actor) | **21.3 px** (snaps to true wall landmark) | **Jeff-Tracker (6.4× tighter)** |
+| **Re-acquisition (Held-Out GT)** | LocoTrack-B base: 11.50 / 0.640 px | **9.26 / 0.604 px** (mean / median, `jefftrack_reacq`) | **Jeff-Tracker (19.5% tighter mean)** |
+| **Occlusion Drift (Held-Out GT)** | LocoTrack-B base: 37.59 px | **17.19 px** (median, `jefftrack_reacq`) | **Jeff-Tracker (54.3% less drift)** |
+| **Volumetric Smoke Jitter (4K)** | Baseline: 15.002 px/f² | **1.316 px/f²** | **Jeff-Tracker (11.4× smoother)** |
+| **Volumetric Smoke Jitter (1080p)** | Baseline: 13.286 px/f² | **1.904 px/f²** | **Jeff-Tracker (7.0× smoother)** |
+| **Inference Speed (4K 783f Plate)** | Baseline: 1830.68s (30.5 min) | **89.11s (1.48 min)** | **Jeff-Tracker (20.5× faster)** |
+| **Inference Speed (1080p 233f Plate)** | Baseline: 222.44s (3.7 min) | **8.78s (0.15 min)** | **Jeff-Tracker (25.3× faster)** |
+| **Commercial Freedom** | Baseline: non-commercial licence | **Apache-2.0** | **Jeff-Tracker (commercial use permitted)** |
 
 ### 2. The 4-Stage Precision Pipeline
 
 1. **Streaming Extended Training**: Sequential 3-cycle training on Kubric shards 8..19 with automatic cache purges. Training loss dropped to **2.0714** while keeping disk space under 1.5 GB.
-2. **Bidirectional Temporal Consensus**: Two-pass forward ($0 \to T$) and backward ($T \to 0$) tracking with exponential cycle-consistency gating. On long multi-window clips (`cycle.mp4`), end-of-shot error was reduced by **98.3%** down to **1.13 px**.
+2. **Bidirectional Temporal Consensus**: Two-pass forward ($0 \to T$) and backward ($T \to 0$) tracking with exponential cycle-consistency gating. On the long multi-window `cycle.mp4` plate (f400–456), the end-of-shot deviation from the baseline's own track is **1.13 px**. That is agreement with a reference tracker, not error against ground truth.
 3. **Native Patch Polish**: Vectorized Pyramidal Lucas-Kanade optical flow on full-resolution raster ($5.6\text{ ms/f}$), locking tracks to native image gradients.
 4. **Savitzky-Golay Trajectory Smoothing**: Cubic polynomial filter on visible segments cutting acceleration jitter down to **1.3 px/f²**.
 
@@ -409,7 +412,7 @@ Following targeted streaming training on Meta's Apache-2.0 Kubric dataset with o
   model — these measure localisation and occlusion handling, not scene variety
 - Real footage has no synthetic ground truth; error metrics are measured against verified
   static geometry landmarks, round-trip closure, and camera bundle solve residuals
-- One CoTracker3 configuration, its `scaled_offline` default
+- One baseline configuration, its default offline mode
 - Occluders on synthetic benches are composited rectangles with real texture, not scene objects
   with true depth ordering
 

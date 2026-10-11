@@ -1,9 +1,9 @@
 # Meta's Kubric shots: the licence holds, and the reason to use them
 # is occlusion LENGTH, not occlusion volume
 
-facebook/CoTracker3_Kubric is Apache-2.0 -- checked on the dataset
-page AND the HF API, not assumed. CoTracker3's code and weights stay
-CC-BY-NC; the shots it was trained on do not. That split is the whole
+Meta AI's Kubric point-tracking release is Apache-2.0 -- checked on the
+dataset page AND the HF API, not assumed. The code and weights of the
+project it shipped with stay non-commercial; the shots do not. That split is the whole
 opening.
 
 The obvious pitch was wrong and got corrected before it reached a

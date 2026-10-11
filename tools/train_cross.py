@@ -58,7 +58,7 @@ def main() -> int:
     ap.add_argument("--model-size", default="base", choices=["small", "base"])
     ap.add_argument("--data-dir", default="gs://kubric-public/tfds")
     ap.add_argument("--dataset", default="movi_e/256x256")
-    # Meta's CoTracker3_Kubric (Apache-2.0) against the MOVi-E the earlier runs used. The
+    # Meta AI's Kubric release (Apache-2.0) against the MOVi-E the earlier runs used. The
     # reason to offer it is occlusion LENGTH, not volume: MOVi-E clips are 24 frames, so an
     # occlusion lasting longer than that cannot exist in them, while 18.5% of the events in
     # that data run past 24 frames. Build the cache with tools/convert_kubric.py.
@@ -96,7 +96,7 @@ def main() -> int:
     ap.add_argument("--occ-pos-weight", type=float, default=0.2,
                     help="position-loss weight on GT-occluded frames. The vendor uses a "
                          "hard 0, which is why LocoTrack never learns to cross an "
-                         "occlusion; 0.2 is CoTracker3's 1/5. Pass 0.0 to reproduce the "
+                         "occlusion; 0.2 is the published recipe's 1/5. Pass 0.0 to reproduce the "
                          "vendor objective exactly.")
     ap.add_argument("--occ-norm", action="store_true",
                     help="normalise the occluded position term by its OWN sample count, "
@@ -125,7 +125,7 @@ def main() -> int:
     ap.add_argument("--num-proxies", type=int, default=16)
     ap.add_argument("--cross-heads", type=int, default=4)
     ap.add_argument("--pyramid-level", type=int, default=0,
-                    help="Route 3: extra correlation levels. CoTracker3 runs FOUR (1024 "
+                    help="Route 3: extra correlation levels. The published recipe runs FOUR (1024 "
                          "corr dims); LocoTrack ships three (768). The vendor accepts this "
                          "argument but cannot run with it -- it builds the extra grid and "
                          "then drops it, because cmdtop is range(3) and `supports` is never "
@@ -134,7 +134,7 @@ def main() -> int:
                          "within float noise (~0.2 px) and has to be TRAINED to pay.")
     ap.add_argument("--occ-l1", action="store_true",
                     help="Route 2: plain L1 for the OCCLUDED population instead of Huber, "
-                         "which is what CoTracker3's recipe uses. Huber is quadratic below "
+                         "which is what the published recipe uses. Huber is quadratic below "
                          "--huber-delta, so a hidden point 2-3 px out -- the range this "
                          "model actually loses in -- is barely corrected. Visible keeps "
                          "Huber. Only meaningful with --occ-norm.")
@@ -228,7 +228,7 @@ def main() -> int:
     if a.data_source == "kubric_meta":
         from jefftrack.data.kubric_meta import DEFAULT_CACHE, batches  # noqa: E402
         a.cache_dir = a.cache_dir or DEFAULT_CACHE
-        print("[data] Meta CoTracker3_Kubric cache: {}".format(a.cache_dir), flush=True)
+        print("[data] Meta AI Kubric cache: {}".format(a.cache_dir), flush=True)
         print("       clip {} frames, {} tracks, {}x{}, holdout {} shots"
               .format(a.clip_len, a.tracks, a.res, a.res, a.holdout), flush=True)
         stream = batches(device=device, cache_dir=a.cache_dir, batch_size=1,

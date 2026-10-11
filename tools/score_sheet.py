@@ -16,7 +16,7 @@ Reading it:
     error read 389.30 px instead of 16.86 px on identical output (see FINDINGS.md)
   * error panels are UNGATED -- every frame the model produced, not just the confident ones
     the 3DE export keeps. Gating flatters whichever engine abstains most, which here is
-    CoTracker3
+    the baseline
 
     runtime\\python311\\python.exe experiments\\Jeff-Tracker\\score_sheet.py
     runtime\\python311\\python.exe experiments\\Jeff-Tracker\\score_sheet.py --tag phase1
@@ -51,7 +51,7 @@ from bench3 import LOCKED_BENCHES  # noqa: E402
 # two sheets from different phases can be read side by side. Dark steps of categorical
 # slots 1/2/3, validated all-pairs against the #1a1a19 surface (worst CVD dE 9.4, worst
 # normal-vision dE 20.9, all >= 3:1 contrast).
-DEFAULT_ENGINES = "jefftrack:Jeff-Tracker:#3987e5,tapnext:TAPNext++:#d95926,"                   "cotracker3:CoTracker3:#199e70"
+DEFAULT_ENGINES = "jefftrack:Jeff-Tracker:#3987e5,tapnext:TAPNext++:#d95926,"                   "baseline:Baseline:#199e70"
 
 # Filled from --engines at startup. A series keeps its hue across sheets so two phases can
 # be laid side by side; any new set must be re-validated before use (validate_palette.js),
@@ -202,7 +202,7 @@ def main() -> int:
     ap.add_argument("--benches", default=",".join(LOCKED_BENCHES))
     ap.add_argument("--reacq", type=int, default=10)
     ap.add_argument("--tag", default="phase0")
-    ap.add_argument("--title", default="Jeff-Tracker vs TAPNext++ vs CoTracker3")
+    ap.add_argument("--title", default="Jeff-Tracker vs TAPNext++ vs Baseline")
     ap.add_argument("--engines", default=DEFAULT_ENGINES,
                     help="comma list of key:Label:#hex. The key is the npz suffix "
                          "bench3.py wrote, so a config variant (jefftrack_r384x512) is "
@@ -290,14 +290,14 @@ def main() -> int:
         ("Localisation is level.  Jeff-Tracker takes the visible median on all four", INK2, 9, "normal"),
         ("benches and loses the mean by 0.05-0.08 px.  That is a tie.", INK2, 9, "normal"),
         ("", INK, 3, "normal"),
-        ("Occlusion is the real gap, and it is large.  CoTracker3 is about 2x better", INK2, 9, "normal"),
+        ("Occlusion is the real gap, and it is large.  The baseline is about 2x better", INK2, 9, "normal"),
         ("on occluded frames on every bench, and ahead on re-acquire everywhere.", INK2, 9, "normal"),
         ("", INK, 3, "normal"),
         ("Coverage is backwards from what was assumed:  we already emit through", INK2, 9, "normal"),
-        ("more occluded frames than CoTracker3 does.  The target is being RIGHT", INK2, 9, "normal"),
+        ("more occluded frames than the baseline does.  The target is being RIGHT", INK2, 9, "normal"),
         ("while hidden, not emitting more.", INK2, 9, "normal"),
         ("", INK, 3, "normal"),
-        ("Not resolution-matched -- CoTracker3 runs 384x512 internally against our", INK3, 8.2, "normal"),
+        ("Not resolution-matched -- the baseline runs 384x512 internally against our", INK3, 8.2, "normal"),
         ("256x256, ~3x the pixels.  Phase 1 settles that before any architecture", INK3, 8.2, "normal"),
         ("conclusion.  The occlusion gap looks too large for resolution to explain,", INK3, 8.2, "normal"),
         ("but that is a prediction, not a measurement.", INK3, 8.2, "normal"),

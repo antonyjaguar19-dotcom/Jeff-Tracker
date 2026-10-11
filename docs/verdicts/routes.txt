@@ -29,7 +29,7 @@ localisation and re-acquisition are already ours at matched resolution.
 
 ~ The change that worked changed the OBJECTIVE. Both architecture
 ~ changes did nothing and the one that added capacity hurt. Occluded
-~ sits at 3.040 / 2.120 against CoTracker3's 1.69-1.99 / 1.708.
+~ sits at 3.040 / 2.120 against the baseline's 1.69-1.99 / 1.708.
 ~ The remaining gap will not close with another flag on this
 ~ architecture -- its joint attention lives inside a space-time stack
 ~ over all points, ours is a residual around a per-track mixer.

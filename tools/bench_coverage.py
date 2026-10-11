@@ -1,8 +1,8 @@
 """Compare engines at MATCHED coverage, which is the only fair way to read a tail.
 
-Why this exists. Phase 1 reported CoTracker3's worst visible error as a flat 5.4-5.8 px
+Why this exists. Phase 1 reported the baseline's worst visible error as a flat 5.4-5.8 px
 against Jeff-Tracker's 6.8-91.8, and called that the one thing it still did decisively
-better. That comparison was not coverage-fair: CoTracker3 thresholds visibility at 0.9
+better. That comparison was not coverage-fair: the baseline thresholds visibility at 0.9
 **inside its own predictor**, so the numbers it hands back are already gated, while
 Jeff-Tracker's were raw. A tracker that declines to answer on its least certain 4% of frames
 will always look steadier than one that answers on everything.
@@ -42,7 +42,7 @@ from bench3 import LOCKED_BENCHES  # noqa: E402
 
 DEFAULT_ENGINES = ("jefftrack:Jeff-Tracker 256x256:#3987e5,"
                    "jefftrack_r384x512:Jeff-Tracker 384x512:#c98500,"
-                   "cotracker3:CoTracker3:#199e70,"
+                   "baseline:Baseline:#199e70,"
                    "tapnext:TAPNext++:#d95926")
 
 SURFACE, PANEL = "#1a1a19", "#232322"
@@ -69,7 +69,7 @@ def stats_at_coverage(bench_dir, npz_path, coverage):
     e, c = err[keep], conf[keep]
     if e.size == 0:
         return None
-    # A boolean confidence (TAPNext, CoTracker3) has no ordering to exploit, so argsort
+    # A boolean confidence (TAPNext, the baseline) has no ordering to exploit, so argsort
     # falls back to array order. Stated rather than hidden: for those engines this is a
     # random 96%, not their best 96%, which if anything works against Jeff-Tracker.
     n = max(1, int(round(coverage * e.size)))
@@ -167,7 +167,7 @@ def main() -> int:
              "600 shared seeds.".format(a.coverage * 100),
              color=INK2, fontsize=9.8, va="top")
     fig.text(0.055, 0.868,
-             "CoTracker3 thresholds visibility at 0.9 inside its own predictor, so an "
+             "The baseline thresholds visibility at 0.9 inside its own predictor, so an "
              "ungated comparison reads its already-gated output against everyone else's raw "
              "output.",
              color=INK3, fontsize=9.0, va="top")
@@ -178,7 +178,7 @@ def main() -> int:
         fig.text(x + 0.020, 0.783, name, color=INK2, fontsize=9.9, va="center")
     fig.text(0.055, 0.055,
              "Occluded accuracy is a separate question and a visible-frame coverage match "
-             "cannot move it -- CoTracker3 remains ahead there.",
+             "cannot move it -- the baseline remains ahead there.",
              color=INK3, fontsize=8.6, va="top")
 
     os.makedirs(a.out_dir, exist_ok=True)

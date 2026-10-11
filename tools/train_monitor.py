@@ -339,7 +339,7 @@ PAGE = r"""<!doctype html>
     <svg id="chart" viewBox="0 0 800 110" preserveAspectRatio="none"></svg>
     <div class="row"><span id="cmin">&nbsp;</span><span id="cmax">&nbsp;</span></div>
     <div class="note">The practice score is how wrong the model is on the shots it is
-      studying right now. It is <b>not pixels</b>, and it cannot be compared to CoTracker3
+      studying right now. It is <b>not pixels</b>, and it cannot be compared to another tracker
       or to a run trained on different shots &mdash; a model can score better here and be
       worse on real footage. It answers one question only: is this run healthy? Going down
       is healthy. Whether the model actually improved is decided afterwards, by the bench

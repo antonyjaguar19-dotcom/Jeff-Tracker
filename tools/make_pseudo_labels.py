@@ -1,11 +1,11 @@
-"""Stage 2: label real plates with an ensemble of teachers, the way CoTracker3 scales.
+"""Stage 2: label real plates with an ensemble of teachers, the way the published recipe scales.
 
 Its stage 1 is Kubric with exact truth (that is `train_cross.py`). Stage 2 is 15k unlabelled
 internet videos pseudo-labelled by four teachers, and the paper's own claim is that this
 second stage, not the architecture, is where its accuracy comes from.
 
 Four things are copied from that recipe because each one is doing work, and they are copied
-from the DESCRIPTION of it -- see LICENSES.md. CoTracker is CC-BY-NC-4.0 and is not a
+from the DESCRIPTION of it -- see LICENSES.md. No non-commercially licensed tracker is a
 teacher here; every teacher below is Apache-2.0 or MIT.
 
   * **One teacher per sample, drawn at random -- not an average.** Averaging four trackers

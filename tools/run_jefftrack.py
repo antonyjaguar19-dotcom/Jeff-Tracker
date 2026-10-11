@@ -5,8 +5,9 @@
         --model-res 512x384 --occlusion-mode rigid_fill
 
 Engines:
-  --engine jefftrack   (default: Apache-2.0 clean-room model)
-  --engine cotracker3  (optional external hook if JT_COTRACKER_DIR is set)
+  --engine jefftrack   (default: the Apache-2.0 model)
+  --engine baseline    (optional external tracker, via JT_BASELINE_ADAPTER;
+                        see tools/external_baseline.py)
 """
 from __future__ import annotations
 
@@ -35,57 +36,16 @@ from jefftrack.io import (  # noqa: E402
 )
 from jefftrack.rigid_fill import inpaint_rigid_occlusions  # noqa: E402
 
-
-def run_cotracker_external(frames, pts, ct_dir=None, ct_ckpt=None):
-    """Run external CoTracker3 without redistributing or vendoring any CC-BY-NC code."""
-    ct_dir = ct_dir or os.environ.get("JT_COTRACKER_DIR", r"E:\CHAT_GPT\Co_Tracker_v001")
-    ct_ckpt = ct_ckpt or os.environ.get(
-        "JT_COTRACKER_CKPT", r"C:\Users\anton\.cache\torch\hub\checkpoints\scaled_offline.pth"
-    )
-    if not os.path.isdir(ct_dir):
-        raise RuntimeError(f"CoTracker directory not found: {ct_dir}")
-    if not os.path.isfile(ct_ckpt):
-        raise RuntimeError(f"CoTracker checkpoint not found: {ct_ckpt}")
-    if ct_dir not in sys.path:
-        sys.path.insert(0, ct_dir)
-    from cotracker.predictor import CoTrackerPredictor
-
-    T, H, W = frames.shape[:3]
-    max_side = 1024
-    scale = min(1.0, float(max_side) / float(max(W, H)))
-    w, h = int(round(W * scale)), int(round(H * scale))
-
-    model = CoTrackerPredictor(checkpoint=ct_ckpt, offline=True, v2=False, window_len=60)
-    model = model.cuda().eval()
-
-    buf = np.empty((T, h, w, 3), np.uint8)
-    for i, fr in enumerate(frames):
-        small = cv2.resize(fr, (w, h), interpolation=cv2.INTER_AREA) if scale != 1.0 else fr
-        buf[i] = small[:, :, ::-1]
-    video = torch.from_numpy(buf).permute(0, 3, 1, 2)[None].float().cuda()
-
-    q = np.concatenate([np.zeros((len(pts), 1), np.float32), pts * scale], axis=1).astype(np.float32)
-    queries = torch.from_numpy(q)[None].cuda()
-
-    t0 = time.time()
-    with torch.no_grad():
-        tr, vs = model(video, queries=queries, backward_tracking=False)
-    dt = time.time() - t0
-
-    tracks = tr[0].detach().cpu().numpy() / scale
-    vis = vs[0].detach().cpu().numpy().astype(bool)
-    conf = vis.astype(np.float32)
-
-    del model, video, queries, tr, vs
-    torch.cuda.empty_cache()
-    return tracks, vis, conf, dt
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)
+from external_baseline import label as baseline_label, run_baseline  # noqa: E402
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Jeff-Tracker on a plate or video")
     ap.add_argument("--plate", required=True, help="Video file or directory of frames")
     ap.add_argument("--name", default="shot")
-    ap.add_argument("--engine", default="jefftrack", choices=["jefftrack", "cotracker3"])
+    ap.add_argument("--engine", default="jefftrack", choices=["jefftrack", "baseline"])
     ap.add_argument("--ckpt", default=DEFAULT_CKPT)
     ap.add_argument("--out", default=os.path.join(HERE, "out"))
     ap.add_argument("--start", type=int, default=1)
@@ -143,11 +103,10 @@ def main() -> int:
         model_res = (mr_parts[0], mr_parts[1])
 
     is_inpainted = None
-    if a.engine == "cotracker3":
-        print("[engine] running external CoTracker3...")
-        tracks, vis, conf, dt = run_cotracker_external(frames, pts)
-        peak_gb = torch.cuda.max_memory_allocated() / 1e9
-        engine_label = "CoTracker3 (Offline Window 60)"
+    if a.engine == "baseline":
+        engine_label = baseline_label()
+        print(f"[engine] running external {engine_label}...")
+        tracks, vis, conf, dt, peak_gb, _ = run_baseline(frames, pts)
     else:
         print(f"[engine] running Jeff-Tracker ({a.arch}) at {model_res[0]}x{model_res[1]}...")
         eng = JeffTrackEngine(device="cuda", model_size=a.model_size, ckpt=a.ckpt,

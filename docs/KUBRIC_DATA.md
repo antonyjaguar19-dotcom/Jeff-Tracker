@@ -1,13 +1,14 @@
-# Training on Meta's Kubric release: what it bought, and what it did not
+# Training on Meta AI's Kubric point-tracking release: what it bought, and what it did not
 
-`facebook/CoTracker3_Kubric` is the synthetic set Meta released for CoTracker3 stage 1, and
-it is **Apache-2.0** — verified on the dataset page and on the Hub API's `cardData.license`,
-not assumed. CoTracker3's own code and weights are CC-BY-NC and are neither used nor derived
-from anywhere in this repository; only the openly-licensed data is.
+Meta AI publishes a set of Kubric-rendered point-tracking shots on the Hugging Face Hub (the
+dataset ID is in the command below), and it is **Apache-2.0** — verified on the dataset page
+and on the Hub API's `cardData.license`, not assumed. Only this openly-licensed data is used;
+no code or weights from the project it was released with are used or derived from anywhere
+in this repository.
 
 ```bash
 hf download facebook/CoTracker3_Kubric --repo-type dataset \
-    --local-dir datasets/CoTracker3_Kubric
+    --local-dir datasets/kubric_meta
 python tools/convert_kubric.py --selftest        # no dataset needed, runs in seconds
 python tools/convert_kubric.py                   # ~4 s per shot, 15x smaller on disk
 python tools/train_cross.py --data-source kubric_meta --steps 20000 --accum 16 \
@@ -99,7 +100,7 @@ for this model's actual job than the point of AJ it gives up.
 
 ## What it did not do, and the mechanism
 
-Accuracy **while a point is hidden** did not move: 2.90 px against CoTracker3's 1.69 on the
+Accuracy **while a point is hidden** did not move: 2.90 px against the baseline tracker's 1.69 on the
 same bench. The coverage figure explains why, and it is the opposite of the intended
 direction:
 

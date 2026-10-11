@@ -20,7 +20,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 PYTHON = sys.executable
 
-RAW_DIR = os.path.join(ROOT, "datasets", "CoTracker3_Kubric")
+RAW_DIR = os.path.join(ROOT, "datasets", "kubric_meta")
 CACHE_DIR = os.path.join(ROOT, "datasets", "kubric_cache")
 WEIGHTS_DIR = os.path.join(ROOT, "weights")
 

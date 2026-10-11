@@ -1,6 +1,6 @@
-"""Download a batch of Kubric training shots from Hugging Face into datasets/CoTracker3_Kubric.
+"""Download a batch of Kubric training shots from Hugging Face into datasets/kubric_meta.
 
-Source: facebook/CoTracker3_Kubric (Apache-2.0, ungated).
+Source: Meta AI's Kubric point-tracking release on Hugging Face (Apache-2.0, ungated).
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from huggingface_hub import hf_hub_download
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-DEST = os.path.join(ROOT, "datasets", "CoTracker3_Kubric")
+DEST = os.path.join(ROOT, "datasets", "kubric_meta")
 
 
 def main():

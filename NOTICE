@@ -1,5 +1,5 @@
-DBtracker
-Copyright 2026 DBtracker contributors
+Jeff-Tracker (formerly DBtracker)
+Copyright 2026 Jeff-Tracker contributors
 
 This product includes software developed at KU-CVLAB.
 
@@ -8,10 +8,10 @@ This product includes software developed at KU-CVLAB.
   Licensed under the Apache License, Version 2.0
 
   The PyTorch implementation is redistributed unmodified under vendor/locotrack/,
-  with its own LICENSE and PROVENANCE.txt retained. DBtracker's model
-  (dbtrack/model/dbtrack_model.py) re-parents LocoTrack's own modules rather than
+  with its own LICENSE and PROVENANCE.txt retained. Jeff-Tracker's model
+  (jefftrack/model/jefftrack_model.py) re-parents LocoTrack's own modules rather than
   reimplementing them, and the released LocoTrack checkpoints are the starting
-  weights for every DBtracker checkpoint.
+  weights for every Jeff-Tracker checkpoint.
 
 LocoTrack is itself derived from TAPIR / tapnet:
 
@@ -28,8 +28,14 @@ Training data preparation uses one file from Kubric:
   challenges/point_tracking/dataset.py -- the add_tracks function, vendored into
   pydeps/kubric/ at install time rather than pip-installing the full package.
 
-Training data is MOVi-E (movi_e/256x256) from gs://kubric-public/tfds, published
-by Google under the Apache License, Version 2.0.
+Training data:
+
+  MOVi-E (movi_e/256x256) from gs://kubric-public/tfds, published by Google under
+  the Apache License, Version 2.0.
+
+  Kubric point-tracking shots published by Meta AI on Hugging Face as the dataset
+  facebook/CoTracker3_Kubric, under the Apache License, Version 2.0. Only this
+  openly licensed data is used; no code or weights from the associated project are.
 
 Cross-track attention (jefftrack/model/cross_track.py) and the occluded-position
 loss weighting (jefftrack/losses.py) are independent implementations written from

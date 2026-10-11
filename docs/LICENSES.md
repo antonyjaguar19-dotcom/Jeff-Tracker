@@ -14,18 +14,19 @@ much the deliverable as the code is.
 | einops, torch, opencv, numpy, huggingface_hub | pip | Apache-2.0 / BSD / MIT | runtime dependencies |
 | Kubric `challenges/point_tracking/dataset.py` | https://github.com/google-research/kubric | **Apache-2.0**, Copyright 2026 The Kubric Authors | `add_tracks` — turns a raw MOVi record into point tracks with occlusion derived from depth + segmentation. Vendored as a single file into `pydeps/kubric/` rather than pip-installing `kubric`, which drags pybullet and OpenEXR onto Windows for a renderer that cannot run there anyway |
 | MOVi-E (`movi_e/256x256`) | `gs://kubric-public/tfds` | **Apache-2.0** | training data. Google's own publication of the Kubric data |
+| Meta AI Kubric point-tracking shots | Hugging Face dataset `facebook/CoTracker3_Kubric` | **Apache-2.0** (declared on the dataset page and in the Hub API's `cardData.license`) | training data for the `kubric_meta` source and the streamed checkpoints. Data only; see [`KUBRIC_DATA.md`](KUBRIC_DATA.md) |
 | tensorflow-cpu, tensorflow_datasets | pip → `pydeps/` **only** | Apache-2.0 | reads the TFRecord shards. Training-time only; nothing at inference imports them |
 
 ## Not used, and why
 
 | artifact | licence | why it is not here |
 |---|---|---|
-| **CoTracker / CoTracker3** (Meta) | **CC-BY-NC-4.0** on code *and* weights | NonCommercial, so it is not usable in a commercial pipeline and is not part of this model. **No CoTracker code or weights are in this repository** and none are redistributed; `tools/bench3.py` loads it from a path the user supplies. No checkpoint here is trained, distilled or selected on it. It **has** been run, to produce the comparison measurements in [`COMPARISON.md`](COMPARISON.md) — see [Running CoTracker3 for comparison](#running-cotracker3-for-comparison) below. The cross-track attention idea comes from its paper and is credited below; an idea is not an implementation. |
+| **The baseline tracker** used in [`COMPARISON.md`](COMPARISON.md) | non-commercial, on code *and* weights | not usable in a commercial pipeline, so it is not part of this model. **None of its code or weights are in this repository** and none are redistributed; the comparison tools load it through an adapter file the user supplies (`JT_BASELINE_ADAPTER`). It **has** been run, to produce comparison measurements — see [Running the baseline for comparison](#running-the-baseline-for-comparison) below. |
 | MFT, SpatialTracker | CC-BY-NC | same reason; evaluated elsewhere, never used here |
 
 **Idea attribution.** Cross-track attention, and the `(1_occ/5 + 1_vis)` occluded-position
 weighting in `jefftrack/losses.py`, are both implemented from the description in
-arXiv 2410.11831 (Karaev et al.). Architecture and method are not copyrightable; source
+Karaev et al., arXiv:2410.11831 (2024), cited in full in [`NOTICE`](../NOTICE). Architecture and method are not copyrightable; source
 code is. No file, function or weight tensor here is derived from any implementation of that
 paper. This credit stays because the ideas are genuinely theirs: removing it would leave
 the same code appearing to claim them, which is both wrong and a weaker position than
@@ -56,7 +57,7 @@ a measurable, recoverable price for a clean chain.
 
 Apache-2.0 §4 requires that you keep [`LICENSE`](../LICENSE) and [`NOTICE`](../NOTICE) with any
 copy or derivative, and state significant changes you make. `NOTICE` names LocoTrack,
-TAPIR, and Kubric; do not strip it.
+TAPIR, Kubric and the training data; do not strip it.
 
 ## Gated weights, and what gating does not do
 
@@ -78,36 +79,30 @@ a hosting one. It has not been taken here.
 The base LocoTrack weights this is fine-tuned from remain ungated and Apache-2.0 at their
 own source, so nothing about this arrangement restricts access to upstream work.
 
-## Running CoTracker3 for comparison
+## Running the baseline for comparison
 
-This section exists because an earlier version of the row above read *"no CoTracker code,
-weights or outputs are in this repository"*, and publishing `COMPARISON.md` made the last
-third of that false. A provenance document that describes a policy the project no longer
-follows is worse than no document, so the ledger is corrected rather than left standing.
+**What is true.** The baseline tracker has been run on the author's own machine to measure
+it against Jeff-Tracker, on synthetic benches with exact ground truth and on real production
+plates. The numbers from those runs are published in `COMPARISON.md` and `BENCHMARK.md`.
 
-**What is true.** CoTracker3 has been run on the author's own machine to measure it against
-Jeff-Tracker on synthetic benches with exact ground truth. The numbers from those runs are
-published in `COMPARISON.md`.
+**What matters for anyone using this repository:**
 
-**What is still true, and is the part that matters for anyone using this repository:**
+- none of the baseline's code or weights are vendored, downloaded, or redistributed here.
+  The comparison tools import nothing from it; they call `track()` in an adapter file named
+  by `JT_BASELINE_ADAPTER`, and report the engine as unavailable if it is unset
+- no baseline output was used as a training target, a teacher, or a distillation source
+- real-plate comparisons (`tools/score_against_baseline.py`, `tools/compare_test_shot.py`)
+  score Jeff-Tracker against the baseline's tracks as a reference. They are comparisons,
+  and the held-out Kubric, synthetic-bench and DAVIS results do not depend on them
 
-- no CoTracker code or weights are vendored, downloaded, or redistributed here.
-  `tools/bench3.py` reads `JT_COTRACKER_DIR` / `JT_COTRACKER_CKPT` and reports the engine
-  as unavailable if they are unset
-- no CoTracker output was used as a training target, a teacher, or a distillation source
-- no checkpoint in this repository was selected, tuned, or rejected on a CoTracker number.
-  The shipping checkpoint was chosen before any of these comparisons existed
-- the cross-track attention block is written from the paper's description. Architecture is
-  not copyrightable; source code is, and none was consulted
+**The residual risk, stated plainly.** A non-commercial licence restricts *use*, not only
+distribution, and running a non-commercial model to inform a commercially-licensed one is a
+use. The position taken here is that benchmarking a competitor and publishing the
+measurement is comparison rather than exploitation, and that nothing derived from those runs
+enters the weights. That is a judgement, not a legal opinion, and it is recorded so anyone
+relying on this repository's licence chain can weigh it themselves.
 
-**The residual risk, stated plainly.** CC-BY-NC-4.0 restricts *use*, not only distribution,
-and running a NonCommercial model to inform a commercially-licensed one is a use. The
-position taken here is that benchmarking a competitor and publishing the measurement is
-comparison rather than exploitation, and that nothing derived from those runs enters the
-weights. That is a judgement, not a legal opinion, and it is recorded so anyone relying on
-this repository's licence chain can weigh it themselves.
-
-**If you need the chain clean of this entirely:** every number in `METHOD.md`,
-`BENCHMARK.md` and `results.json` predates and does not depend on any CoTracker run. Ignore
-`COMPARISON.md` and the provenance is Apache-2.0 end to end — Apache code, Apache base
-weights, Apache training data.
+**If you need the chain clean of this entirely:** the DAVIS numbers in `BENCHMARK.md`,
+`results.json`, `METHOD.md` and the held-out Kubric results do not depend on any baseline
+run. Ignore the baseline columns in `COMPARISON.md` and `BENCHMARK.md` and the provenance is
+Apache-2.0 end to end — Apache code, Apache base weights, Apache training data.

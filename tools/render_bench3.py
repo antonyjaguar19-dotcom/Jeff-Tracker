@@ -47,7 +47,7 @@ from jefftrack.io import list_frames, read_frame  # noqa: E402
 from score_occlusion import load_shot, warp, is_occluded  # noqa: E402
 from bench3 import LOCKED_BENCHES  # noqa: E402  (tools/ is on sys.path)
 
-ENGINE_ORDER = ["jefftrack", "tapnext", "cotracker3"]   # overridden by --engines
+ENGINE_ORDER = ["jefftrack", "tapnext", "baseline"]   # overridden by --engines
 GREEN, AMBER, RED, WHITE = (90, 220, 90), (60, 190, 250), (60, 60, 255), (255, 255, 255)
 
 
@@ -272,7 +272,7 @@ def main() -> int:
     ap.add_argument("--tag", default="",
                     help="suffix for the output names. Without it a later phase silently "
                          "overwrites an earlier phase's sheets -- they share a filename.")
-    ap.add_argument("--engines", default="jefftrack,tapnext,cotracker3",
+    ap.add_argument("--engines", default="jefftrack,tapnext,baseline",
                     help="comma list of npz suffixes to render, in panel order. A config "
                          "variant (jefftrack_r384x512) is its own entry.")
     a = ap.parse_args()

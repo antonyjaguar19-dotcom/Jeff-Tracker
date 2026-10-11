@@ -119,32 +119,24 @@ This is a display choice, not a claim about the model. It still emits those posi
 coverage figures in [`../docs/METHOD.md`](../docs/METHOD.md) are what quantify how often it
 declines to commit.
 
-## The matched-coverage figure
+## Comparison figures
 
-`coverage_matched.png` is the fair form of the tail comparison, and the reason it exists is
-worth stating: CoTracker3 thresholds visibility at 0.9 inside its own predictor, so reading
-its output against an ungated one compares a gated result with a raw one. The figure ranks
-each engine's frames by that engine's own confidence, keeps the same fraction from every
-engine, and compares what is left.
+The matched-coverage figure and the two comparison score sheets are generated, not drawn,
+and are not committed: they are rebuilt from the `.npz` files a benchmark run produces, so
+they cannot drift from the tables in [`../docs/COMPARISON.md`](../docs/COMPARISON.md). The
+tables carry every number the figures show.
+
+The matched-coverage figure is the fair form of the tail comparison. The baseline tracker
+thresholds visibility at 0.9 inside its own predictor, so reading its output against an
+ungated one compares a gated result with a raw one. The figure ranks each engine's frames by
+that engine's own confidence, keeps the same fraction from every engine, and compares what is
+left.
 
 ```bash
 python tools/bench_coverage.py --coverage 0.96
-```
-
-Regenerated from the `.npz` a benchmark run produced, so it cannot drift from the tables in
-[`../docs/COMPARISON.md`](../docs/COMPARISON.md). Contains measurements only, no footage.
-
-## The comparison score sheets
-
-`comparison_default_settings.png` and `comparison_matched_resolution.png` are generated,
-not drawn: `tools/score_sheet.py` re-scores every `.npz` a benchmark run produced and
-renders the page from those numbers, so the sheets cannot drift from the tables in
-[`../docs/COMPARISON.md`](../docs/COMPARISON.md).
-
-```bash
 python tools/score_sheet.py --tag phase0
 python tools/score_sheet.py --tag phase1 \
-    --engines "jefftrack:Jeff-Tracker 256x256:#3987e5,jefftrack_r384x512:Jeff-Tracker 384x512:#c98500,cotracker3:CoTracker3:#199e70,tapnext:TAPNext++:#d95926" \
+    --engines "jefftrack:Jeff-Tracker 256x256:#3987e5,jefftrack_r384x512:Jeff-Tracker 384x512:#c98500,baseline:Baseline:#199e70,tapnext:TAPNext++:#d95926" \
     --verdict docs/verdicts/phase1.txt
 ```
 

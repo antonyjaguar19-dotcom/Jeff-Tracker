@@ -17,4 +17,5 @@ weights/*test*
 weights/backup_*/
 weights/*_ema.ckpt
 /local/
+training.log
 

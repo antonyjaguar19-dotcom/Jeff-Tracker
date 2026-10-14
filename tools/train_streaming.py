@@ -88,6 +88,16 @@ def main():
                     help="Anti-jitter temporal acceleration loss weight")
     ap.add_argument("--deform-weight", type=float, default=0.08,
                     help="Non-rigid surface deformation relative neighbor distance loss weight")
+    ap.add_argument("--unfreeze-backbone", action="store_true", default=True,
+                    help="Unfreeze ResNet visual backbone during streaming training")
+    ap.add_argument("--backbone-lr-ratio", type=float, default=0.25,
+                    help="Learning rate multiplier for visual backbone")
+    ap.add_argument("--num-proxies", type=int, default=64,
+                    help="Number of proxy cross-attention tokens (default: 64)")
+    ap.add_argument("--pyramid-level", type=int, default=1,
+                    help="Extra correlation pyramid levels (default: 1 for 4-level pyramid)")
+    ap.add_argument("--cross-heads", type=int, default=4,
+                    help="Number of cross-attention heads")
     ap.add_argument("--lr", type=float, default=1e-4)
     a = ap.parse_args()
 
@@ -99,6 +109,7 @@ def main():
     print("=" * 78)
     print(" STREAMING MULTI-BATCH TRAINING WITH BOUNDED DISK USAGE")
     print("=" * 78)
+    print(f"Architecture:       WIDENED (Proxies: {a.num_proxies}, Pyramid: +{a.pyramid_level}, Backbone: {'Unfrozen' if a.unfreeze_backbone else 'Frozen'})")
     print(f"Starting Shard:     {a.start_shard}")
     print(f"Shards per Cycle:   {a.shards_per_cycle} (~1.2 GB peak)")
     print(f"Total Cycles:       {a.cycles}")
@@ -160,8 +171,14 @@ def main():
             "--occ-norm",
             "--occ-l1",
             "--unfreeze-mixer",
+            "--num-proxies", str(a.num_proxies),
+            "--pyramid-level", str(a.pyramid_level),
+            "--cross-heads", str(a.cross_heads),
             "--lr", str(a.lr)
         ]
+        if a.unfreeze_backbone:
+            cmd_train.append("--unfreeze-backbone")
+            cmd_train.extend(["--backbone-lr-ratio", str(a.backbone_lr_ratio)])
         if a.carry_state:
             cmd_train.append("--carry-state")
         if not run_cmd(cmd_train, f"Train Cycle {cycle + 1} ({a.steps_per_cycle} steps)"):

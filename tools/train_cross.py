@@ -112,6 +112,11 @@ def main() -> int:
                          "occlusion happens in the frozen blocks. Breaks the "
                          "check_identity.py attribution -- run a frozen job alongside if "
                          "that matters.")
+    ap.add_argument("--unfreeze-backbone", action="store_true",
+                    help="also train the ResNet visual backbone, allowing feature maps "
+                         "to adapt to extreme smoke, VFX artifacts, and deformations.")
+    ap.add_argument("--backbone-lr-ratio", type=float, default=0.25,
+                    help="multiplier on learning rate for the visual backbone (default: 0.25)")
     ap.add_argument("--lr-decay", default="cosine", choices=["cosine", "none"],
                     help="cosine decays to --lr-min-frac by the end. 'none' reproduces the "
                          "old warmup-then-flat schedule, which never lets the model settle "
@@ -168,8 +173,8 @@ def main() -> int:
     model = load_jefftrack(a.resume or a.base_ckpt, model_size=a.model_size,
                          num_proxies=a.num_proxies, cross_heads=a.cross_heads,
                          carry_state=a.carry_state, pyramid_level=a.pyramid_level,
-                         zero_init=a.resume is None, device=device)
-    model.freeze_base(unfreeze_mixer=a.unfreeze_mixer)
+                         zero_init=a.resume is None, device=device, allow_widening=True)
+    model.freeze_base(unfreeze_mixer=a.unfreeze_mixer, unfreeze_backbone=a.unfreeze_backbone)
     model.train()
     trainable = [p for p in model.parameters() if p.requires_grad]
     n_train = sum(p.numel() for p in trainable)
@@ -184,9 +189,11 @@ def main() -> int:
     n_cross = sum(p.numel() for p in model.cross_parameters() if p.requires_grad)
     n_cmdtop = sum(p.numel() for i in range(3, len(model.cmdtop))
                    for p in model.cmdtop[i].parameters() if p.requires_grad)
-    print("[model] cross {}   temporal mixer {}   extra cmdtop {}   image encoder frozen"
-          .format(n_cross, n_mixer if a.unfreeze_mixer else "FROZEN", n_cmdtop), flush=True)
-    leftover = n_train - n_cross - n_mixer - n_cmdtop
+    n_backbone = sum(p.numel() for p in model.backbone_parameters() if p.requires_grad)
+    print("[model] cross {}   temporal mixer {}   extra cmdtop {}   backbone {}"
+          .format(n_cross, n_mixer if a.unfreeze_mixer else "FROZEN", n_cmdtop,
+                  n_backbone if a.unfreeze_backbone else "FROZEN"), flush=True)
+    leftover = n_train - n_cross - n_mixer - n_cmdtop - n_backbone
     if leftover:
         print("[model] WARNING {} trainable parameters in neither bucket".format(leftover), flush=True)
     print("[loss]  occluded position {} {} ({})".format(
@@ -197,7 +204,17 @@ def main() -> int:
          else "per-sample multiplier -- actual share depends on how much occlusion the "
               "clip contains")), flush=True)
 
-    opt = torch.optim.AdamW(trainable, lr=a.lr, weight_decay=a.wd)
+    if a.unfreeze_backbone and a.backbone_lr_ratio < 1.0:
+        backbone_set = set(model.backbone_parameters())
+        other_params = [p for p in trainable if p not in backbone_set]
+        backbone_trainable = [p for p in trainable if p in backbone_set]
+        param_groups = [
+            {"params": other_params, "lr": a.lr, "initial_lr": a.lr},
+            {"params": backbone_trainable, "lr": a.lr * a.backbone_lr_ratio, "initial_lr": a.lr * a.backbone_lr_ratio},
+        ]
+        opt = torch.optim.AdamW(param_groups, weight_decay=a.wd)
+    else:
+        opt = torch.optim.AdamW(trainable, lr=a.lr, weight_decay=a.wd)
 
     # sched.step() runs once per OPTIMISER step, not once per sample, so the horizon is
     # steps//accum. Getting that wrong decays over the wrong length and looks like a
@@ -246,10 +263,11 @@ def main() -> int:
                          tracks_to_sample=a.tracks)
 
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
-    cfg = {"model_size": a.model_size, "num_proxies": a.num_proxies,
+    actual_proxies = model.torch_pips_mixer.cross["0"].num_proxies if "0" in model.torch_pips_mixer.cross else a.num_proxies
+    cfg = {"model_size": a.model_size, "num_proxies": actual_proxies,
            "cross_heads": a.cross_heads, "cross_layers": None,
            "carry_state": getattr(model.torch_pips_mixer, "carry_state", a.carry_state),
-           "pyramid_level": a.pyramid_level,
+           "pyramid_level": getattr(model, "extra_pyramid", a.pyramid_level),
            "base_ckpt": os.path.basename(a.base_ckpt), "res": a.res,
            "tracks": a.tracks, "dataset": a.dataset, "data_dir": a.data_dir,
            # The data a run saw travels with its weights, for the same reason the
@@ -259,7 +277,10 @@ def main() -> int:
            "occ_pos_weight": a.occ_pos_weight, "occ_norm": bool(a.occ_norm),
            "occ_l1": bool(a.occ_l1),
            "jitter_weight": float(a.jitter_weight), "deform_weight": float(a.deform_weight),
-           "unfreeze_mixer": bool(a.unfreeze_mixer), "lr_decay": a.lr_decay,
+           "unfreeze_mixer": bool(a.unfreeze_mixer),
+           "unfreeze_backbone": bool(a.unfreeze_backbone),
+           "backbone_lr_ratio": float(a.backbone_lr_ratio),
+           "lr_decay": a.lr_decay,
            "ema": a.ema, "accum": a.accum, "lr": a.lr}
 
     def save(step: int, running: float):

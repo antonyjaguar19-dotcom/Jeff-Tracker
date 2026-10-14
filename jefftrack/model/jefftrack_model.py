@@ -228,7 +228,7 @@ class JeffTracker(LocoTrack):
         """Just the new blocks -- what a fine-tune trains while the rest stays frozen."""
         return self.torch_pips_mixer.cross.parameters()
 
-    def freeze_base(self, unfreeze_mixer: bool = False) -> None:
+    def freeze_base(self, unfreeze_mixer: bool = False, unfreeze_backbone: bool = False) -> None:
         """Everything except the cross-track blocks stops learning.
 
         On a 16 GB A4000 this is not a preference, it is the difference between a
@@ -237,19 +237,9 @@ class JeffTracker(LocoTrack):
         `unfreeze_mixer` additionally releases the vendor's TEMPORAL transformer -- the
         part that moves a track through time -- while the image encoder stays frozen.
 
-        Measured reason for the option. Cross-track attention runs per frame
-        (cross_track.py reshapes to (B*F, N, D)); it has no temporal path of its own, so
-        anything it infers from a point's neighbours can only be carried across an
-        occlusion by the vendor's temporal blocks -- which are frozen, and which were
-        trained under an objective that zeroed the position loss on occluded frames. The
-        block is not short of information: raising query_chunk_size from 64 to 256, four
-        times the neighbours, moved nothing past the third decimal at either resolution.
-        It is short of authority.
-
-        The cost is real and is why this is a flag rather than the default: with the
-        vendor's parameters moving, check_identity.py no longer separates "cross-track
-        attention helped" from "the base drifted", and a later result is a mixture of the
-        two. Keep a frozen run alongside if that attribution is wanted.
+        `unfreeze_backbone` additionally unfreezes the ResNet visual backbone,
+        cost correlation conv, and occlusion linear heads so visual features
+        can adapt to extreme smoke, VFX artifacts, and lighting shifts.
         """
         for p in self.parameters():
             p.requires_grad_(False)
@@ -269,6 +259,13 @@ class JeffTracker(LocoTrack):
             for module in (mixer.input_proj, mixer.transformer, mixer.output_proj):
                 for p in module.parameters():
                     p.requires_grad_(True)
+        if unfreeze_backbone:
+            for p in self.resnet_torch.parameters():
+                p.requires_grad_(True)
+            for p in self.cost_conv.parameters():
+                p.requires_grad_(True)
+            for p in self.occ_linear.parameters():
+                p.requires_grad_(True)
 
     def mixer_parameters(self):
         """The vendor's temporal mixer only -- what `unfreeze_mixer` releases."""
@@ -277,12 +274,21 @@ class JeffTracker(LocoTrack):
             for p in module.parameters():
                 yield p
 
+    def backbone_parameters(self):
+        """The visual feature extractor parameters."""
+        for p in self.resnet_torch.parameters():
+            yield p
+        for p in self.cost_conv.parameters():
+            yield p
+        for p in self.occ_linear.parameters():
+            yield p
+
 
 def load_jefftrack(ckpt_path: str, model_size: str = "base",
                  cross_layers: Optional[Sequence[int]] = None, num_proxies: int = 16,
                  cross_heads: int = 4, zero_init: bool = True,
                  carry_state: bool = False, pyramid_level: int = 0,
-                 device: str = "cpu") -> JeffTracker:
+                 device: str = "cpu", allow_widening: bool = True) -> JeffTracker:
     """Build JeffTracker and load LocoTrack weights into it.
 
     The published checkpoints are Lightning checkpoints: weights live under 'state_dict'
@@ -291,10 +297,8 @@ def load_jefftrack(ckpt_path: str, model_size: str = "base",
     random and every number measured from it is fiction.
 
     A checkpoint written by train_cross.py carries its own architecture under 'jefftrack',
-    and that wins over the arguments here. A trained checkpoint loaded into a
-    differently-shaped model would either throw a shape error or, worse, land its proxies
-    in a block of the wrong width, so the shape travels with the weights rather than
-    depending on the caller passing the same flags months later.
+    and that wins over the arguments here unless allow_widening is True, in which case
+    the caller can expand num_proxies or pyramid_level beyond the saved checkpoint.
     """
     blob = torch.load(ckpt_path, map_location="cpu", weights_only=False)
     # Every checkpoint in weights/ was written before the rename and carries its
@@ -305,18 +309,42 @@ def load_jefftrack(ckpt_path: str, model_size: str = "base",
         saved = blob.get("jefftrack")
         if saved is None:
             saved = blob.get("dbtrack")
+    req_num_proxies = num_proxies
+    req_pyramid_level = pyramid_level
+    req_cross_heads = cross_heads
     if saved:
         model_size = saved.get("model_size", model_size)
         cross_layers = saved.get("cross_layers", cross_layers)
-        num_proxies = int(saved.get("num_proxies", num_proxies))
-        cross_heads = int(saved.get("cross_heads", cross_heads))
+        saved_proxies = int(saved.get("num_proxies", num_proxies))
+        saved_heads = int(saved.get("cross_heads", cross_heads))
+        saved_pyramid = int(saved.get("pyramid_level", pyramid_level))
         carry_state = carry_state or bool(saved.get("carry_state", False))
-        pyramid_level = int(saved.get("pyramid_level", pyramid_level))
+        if allow_widening:
+            num_proxies = max(req_num_proxies, saved_proxies)
+            pyramid_level = max(req_pyramid_level, saved_pyramid)
+            cross_heads = req_cross_heads if req_cross_heads != 4 else saved_heads
+        else:
+            num_proxies = saved_proxies
+            cross_heads = saved_heads
+            pyramid_level = saved_pyramid
     model = JeffTracker(model_size=model_size, cross_layers=cross_layers,
                     num_proxies=num_proxies, cross_heads=cross_heads, zero_init=zero_init,
                     carry_state=carry_state, pyramid_level=pyramid_level)
     state = blob["state_dict"] if "state_dict" in blob else blob
     state = {k.replace("model.", "", 1): v for k, v in state.items()}
+
+    # Seamless proxy expansion: copy existing trained proxies into widened parameter
+    for key in list(state.keys()):
+        if key.endswith(".proxies") and ".cross." in key:
+            saved_p = state[key]
+            try:
+                mod_param = model.get_parameter(key)
+                if mod_param.shape[0] > saved_p.shape[0]:
+                    new_p = mod_param.detach().clone()
+                    new_p[:saved_p.shape[0]] = saved_p
+                    state[key] = new_p
+            except Exception:
+                pass
 
     # Order matters, and it is the opposite of the obvious one. The model is built at the
     # vendor's three-level width so a LocoTrack checkpoint lands cleanly on every tensor;

@@ -81,25 +81,41 @@ def parse_training_log():
         return {"status": "Waiting for training task...", "lines": [], "history": []}
 
     try:
-        with open(log_path, "r", encoding="utf-8", errors="replace") as f:
-            lines = f.readlines()
+        with open(log_path, "rb") as f:
+            raw = f.read()
+        if raw.startswith(b"\xff\xfe") or b"\x00" in raw[:100]:
+            lines = raw.decode("utf-16", errors="replace").splitlines(keepends=True)
+        else:
+            lines = raw.decode("utf-8", errors="replace").splitlines(keepends=True)
     except Exception as e:
         return {"status": f"Error reading log: {e}", "lines": [], "history": []}
 
     start_shard = 12
     total_cycles = 6
-    banner = "".join(lines[:35])
+    steps_per_cycle = 400
+    shards_per_cycle = 2
+    banner = "".join(lines[:45])
     m_st = re.search(r"Starting Shard:\s+(\d+)", banner)
     if m_st:
         start_shard = int(m_st.group(1))
     m_cy = re.search(r"Total Cycles:\s+(\d+)", banner)
     if m_cy:
         total_cycles = int(m_cy.group(1))
+    m_spc = re.search(r"Steps per Cycle:\s+(\d+)", banner)
+    if m_spc:
+        steps_per_cycle = int(m_spc.group(1))
+    m_tot = re.search(r"Total Target Steps:\s+(\d+)", banner)
+    if m_tot:
+        total_steps = int(m_tot.group(1))
+    else:
+        total_steps = total_cycles * steps_per_cycle
+    m_shpc = re.search(r"Shards per Cycle:\s+(\d+)", banner)
+    if m_shpc:
+        shards_per_cycle = int(m_shpc.group(1))
 
     cycle = 1
-    shards_info = f"{start_shard:04d}..{start_shard+1:04d}"
+    shards_info = f"{start_shard:04d}..{start_shard+shards_per_cycle-1:04d}"
     current_step = 0
-    total_steps = total_cycles * 250
     loss_history = []
     latest_loss = 0.0
     latest_lr = "1.0e-4"
@@ -108,17 +124,21 @@ def parse_training_log():
     phase = "Active Training"
     completed = False
 
+    cycle_header_re = re.compile(r"CYCLE\s+(\d+)/(\d+):\s+Processing Shards\s+(\d+)\s*\.\.\s*(\d+)")
     dl_re = re.compile(r"\[downloading\]\s+(\d+)\.tar\.gz")
     conv_re = re.compile(r"\[(\d+)/(\d+)\]\s+(\d+)\s+([\d\.]+)\s*MB")
     step_re = re.compile(r"\[\s*(\d+)/(\d+)\]\s+loss\s+([\d\.]+)\s+lr\s+([e\d\.\-]+)\s+gnorm\s+([\d\.]+)\s+clip\s+(\d+)%\s+([\d\.]+s/step)\s+vram\s+([\d\.]+GB)", re.IGNORECASE)
 
     for l in lines:
+        m_hdr = cycle_header_re.search(l)
+        if m_hdr:
+            cycle = int(m_hdr.group(1))
+            total_cycles = int(m_hdr.group(2))
+            shards_info = f"{int(m_hdr.group(3)):04d}..{int(m_hdr.group(4)):04d}"
+
         m_dl = dl_re.search(l)
         if m_dl:
             shard_num = int(m_dl.group(1))
-            cycle = max(1, min(total_cycles, (shard_num - start_shard) // 2 + 1))
-            s_base = start_shard + (cycle - 1) * 2
-            shards_info = f"{s_base:04d}..{s_base+1:04d}"
             phase = f"Streaming Shard {shard_num:04d}.tar.gz"
 
         m_cv = conv_re.search(l)
@@ -133,10 +153,10 @@ def parse_training_log():
             latest_lr = m_s.group(4)
             latest_speed = m_s.group(7)
             latest_vram = m_s.group(8)
-            g_step = (cycle - 1) * 250 + cycle_step
+            g_step = (cycle - 1) * steps_per_cycle + cycle_step
             current_step = g_step
             loss_history.append({"step": g_step, "loss": round(loss_val, 4)})
-            phase = f"Training Step {cycle_step}/250 (Cycle {cycle}/{total_cycles})"
+            phase = f"Training Step {cycle_step}/{steps_per_cycle} (Cycle {cycle}/{total_cycles})"
 
         if "ALL" in l and "COMPLETED" in l:
             completed = True

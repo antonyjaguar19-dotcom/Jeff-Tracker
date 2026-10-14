@@ -85,13 +85,25 @@ def jefftracker(pretrained: bool = True, model_res=(256, 256), device: str = "cu
               ckpt: str = None, **kw):
     """Jeff-Tracker -- LocoTrack-B plus cross-track attention.
 
-    The default weights are `jefftrack_reacq_stream.ckpt`: the winning streamed checkpoint
-    trained on Meta's Apache-2.0 Kubric with Re-acquisition Surge Loss.
+    The default weights are `jefftrack_reacq_v2_smooth.ckpt`: fine-tuned on Kubric
+    with Anti-Jitter Temporal Acceleration Loss, Surface Deformation Consistency,
+    and Re-acquisition Surge Loss.
     """
     from jefftrack.engine import JeffTrackEngine              # noqa: PLC0415
-    path = ckpt or (_resolve_checkpoint("jefftrack_reacq_stream.ckpt") if pretrained else None)
+    preferred = "jefftrack_reacq_v2_smooth.ckpt"
+    local_p = os.path.join(HERE, "weights", preferred)
+    default_name = preferred if os.path.isfile(local_p) else "jefftrack_reacq_stream.ckpt"
+    path = ckpt or (_resolve_checkpoint(default_name) if pretrained else None)
     return JeffTrackEngine(device=device, model_size="base", ckpt=path,
                          model_res=model_res, arch="jefftrack", **kw)
+
+
+def jefftracker_reacq_v2_smooth(pretrained: bool = True, model_res=(256, 256), device: str = "cuda",
+                                ckpt: str = None, **kw):
+    """Explicit entry point for the anti-jitter & surface-smooth fine-tuned checkpoint."""
+    preferred = "jefftrack_reacq_v2_smooth.ckpt"
+    path = ckpt or (_resolve_checkpoint(preferred) if pretrained else None)
+    return jefftracker(pretrained=pretrained, model_res=model_res, device=device, ckpt=path, **kw)
 
 
 def jefftracker_reacq_stream(pretrained: bool = True, model_res=(256, 256), device: str = "cuda",

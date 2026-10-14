@@ -77,11 +77,17 @@ def main():
     ap.add_argument("--shards-per-cycle", type=int, default=4, help="shards downloaded per batch")
     ap.add_argument("--cycles", type=int, default=4, help="number of streaming download-train-delete cycles")
     ap.add_argument("--steps-per-cycle", type=int, default=400, help="optimizer steps trained per batch")
-    ap.add_argument("--base-ckpt", default=os.path.join(WEIGHTS_DIR, "jefftrack_reacq.ckpt"),
+    ap.add_argument("--base-ckpt", default=os.path.join(WEIGHTS_DIR, "jefftrack_reacq_v2_smooth.ckpt"),
                     help="checkpoint to resume/start from")
-    ap.add_argument("--out-ckpt", default=os.path.join(WEIGHTS_DIR, "jefftrack_reacq_stream.ckpt"),
+    ap.add_argument("--out-ckpt", default=os.path.join(WEIGHTS_DIR, "jefftrack_reacq_v2_smooth.ckpt"),
                     help="output checkpoint to update after each cycle")
+    ap.add_argument("--carry-state", action="store_true", default=True,
+                    help="Enable stateful cross-attention across mixer temporal blocks")
     ap.add_argument("--reacq-share", type=float, default=0.15)
+    ap.add_argument("--jitter-weight", type=float, default=0.15,
+                    help="Anti-jitter temporal acceleration loss weight")
+    ap.add_argument("--deform-weight", type=float, default=0.08,
+                    help="Non-rigid surface deformation relative neighbor distance loss weight")
     ap.add_argument("--lr", type=float, default=1e-4)
     a = ap.parse_args()
 
@@ -148,12 +154,16 @@ def main():
             "--save-every", str(a.steps_per_cycle),
             "--log-every", "50",
             "--reacq-share", str(a.reacq_share),
+            "--jitter-weight", str(a.jitter_weight),
+            "--deform-weight", str(a.deform_weight),
             "--occ-pos-weight", "0.2",
             "--occ-norm",
             "--occ-l1",
             "--unfreeze-mixer",
             "--lr", str(a.lr)
         ]
+        if a.carry_state:
+            cmd_train.append("--carry-state")
         if not run_cmd(cmd_train, f"Train Cycle {cycle + 1} ({a.steps_per_cycle} steps)"):
             print("[streaming] training failed, aborting loop.")
             return 1

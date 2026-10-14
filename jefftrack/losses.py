@@ -167,9 +167,97 @@ def occluded_share_of(tracks, target_points, occluded, delta=4.0,
     return (occ_part / total) if total > 0 else 0.0
 
 
+def temporal_acceleration_loss(points: torch.Tensor, target_points: torch.Tensor,
+                               target_occ: torch.Tensor, huber_delta: float = 2.0) -> torch.Tensor:
+    """Anti-Jitter Loss: Enforces physical acceleration and smooth temporal continuity.
+
+    Points shape: [B, N, T, 2] in (256, 256) grid.
+    Target_points: [B, N, T, 2].
+    Target_occ: [B, N, T] bool/float (1.0 = occluded).
+
+    Computes second temporal differences (acceleration) on consecutive 3-frame windows
+    and penalizes divergence from ground-truth acceleration to eliminate high-frequency chatter.
+    """
+    T = points.shape[2]
+    if T < 3:
+        return torch.tensor(0.0, device=points.device)
+
+    # Second differences: p_{t+1} - 2*p_t + p_{t-1}
+    accel_pred = points[:, :, 2:] - 2.0 * points[:, :, 1:-1] + points[:, :, :-2]
+    accel_gt = target_points[:, :, 2:] - 2.0 * target_points[:, :, 1:-1] + target_points[:, :, :-2]
+
+    # Only supervise where point was visible in all 3 frames
+    vis = 1.0 - target_occ.float()
+    vis3 = vis[:, :, 2:] * vis[:, :, 1:-1] * vis[:, :, :-2]
+
+    diff = accel_pred - accel_gt
+    dist = torch.sqrt(torch.sum(diff ** 2, dim=-1) + 1e-12)
+
+    # Smooth Huber penalty on acceleration error
+    huber = torch.where(dist < huber_delta, 0.5 * (dist ** 2), huber_delta * (dist - 0.5 * huber_delta))
+
+    num_valid = torch.sum(vis3)
+    if num_valid > 0:
+        return torch.sum(huber * vis3) / num_valid
+    return torch.tensor(0.0, device=points.device)
+
+
+def surface_deformation_loss(points: torch.Tensor, target_points: torch.Tensor,
+                             target_occ: torch.Tensor, max_neighbors: int = 8,
+                             radius_px: float = 40.0) -> torch.Tensor:
+    """Non-Rigid Surface / Mesh Deformation Consistency Loss.
+
+    Enforces that pairs of tracks that start as spatial neighbors preserve their relative
+    distances dynamically, teaching cross-track attention to maintain mesh surface geometry.
+
+    Points shape: [B, N, T, 2] in (256, 256) grid.
+    """
+    B, N, T, _ = points.shape
+    if N < 2:
+        return torch.tensor(0.0, device=points.device)
+
+    # Sample reference frame distances (frame 0)
+    p0_gt = target_points[:, :, 0]  # [B, N, 2]
+    # Pairwise distance matrix at frame 0
+    diff0 = p0_gt.unsqueeze(2) - p0_gt.unsqueeze(1)  # [B, N, N, 2]
+    dist0 = torch.sqrt(torch.sum(diff0 ** 2, dim=-1) + 1e-12)  # [B, N, N]
+
+    # Neighbors mask: distance < radius_px and not self
+    mask_neighbor = (dist0 < radius_px) & (dist0 > 1.0)
+    if not torch.any(mask_neighbor):
+        return torch.tensor(0.0, device=points.device)
+
+    # Check pairwise visibility across frames.
+    # When both are visible: weight 1.0.
+    # When one is occluded and neighbor is visible: weight 0.5 (penalizes occluded point drifting away from visible anchor).
+    # When both are occluded: weight 0.1.
+    occ_i = target_occ.float().unsqueeze(2)  # [B, N, 1, T]
+    occ_j = target_occ.float().unsqueeze(1)  # [B, 1, N, T]
+    vis_weight = ((1.0 - occ_i) * (1.0 - occ_j) +
+                  0.5 * ((1.0 - occ_i) * occ_j + occ_i * (1.0 - occ_j)) +
+                  0.1 * (occ_i * occ_j))
+
+    # Temporal pairwise distances: [B, N, N, T]
+    diff_pred = points.unsqueeze(2) - points.unsqueeze(1)  # [B, N, N, T, 2]
+    dist_pred = torch.sqrt(torch.sum(diff_pred ** 2, dim=-1) + 1e-12)
+
+    diff_gt = target_points.unsqueeze(2) - target_points.unsqueeze(1)
+    dist_gt = torch.sqrt(torch.sum(diff_gt ** 2, dim=-1) + 1e-12)
+
+    dist_err = torch.abs(dist_pred - dist_gt)
+
+    # Combine neighbor mask and visibility
+    full_mask = mask_neighbor.unsqueeze(-1) * vis_weight  # [B, N, N, T]
+    num_valid = torch.sum(full_mask)
+    if num_valid > 0:
+        return torch.sum(dist_err * full_mask) / num_valid
+    return torch.tensor(0.0, device=points.device)
+
+
 def _one_iter(points, occlusion, target_points, target_occ, shape, expected_dist,
               position_loss_weight, expected_dist_thresh, huber_delta, occluded_weight,
-              occluded_in_frame_only, occ_norm=False, occ_l1=False, reacq_share=0.0):
+              occluded_in_frame_only, occ_norm=False, occ_l1=False, reacq_share=0.0,
+              jitter_weight=0.0, deform_weight=0.0):
     points = convert_grid_coordinates(points, shape[3:1:-1], (256, 256),
                                       coordinate_format="xy")
     target_points = convert_grid_coordinates(target_points, shape[3:1:-1], (256, 256),
@@ -188,6 +276,18 @@ def _one_iter(points, occlusion, target_points, target_occ, shape, expected_dist
                                          occluded_in_frame_only=occluded_in_frame_only)
         loss_huber = torch.mean(loss_huber) * position_loss_weight
 
+    # Anti-jitter acceleration loss
+    loss_jitter = torch.tensor(0.0, device=points.device)
+    if jitter_weight > 0.0:
+        loss_jitter = temporal_acceleration_loss(points, target_points, target_occ) * jitter_weight
+
+    # Non-rigid surface deformation loss
+    loss_deform = torch.tensor(0.0, device=points.device)
+    if deform_weight > 0.0:
+        loss_deform = surface_deformation_loss(points, target_points, target_occ) * deform_weight
+
+    loss_pos_total = loss_huber + loss_jitter + loss_deform
+
     if expected_dist is None:
         loss_prob = torch.tensor(0.0, device=points.device)
     else:
@@ -197,13 +297,14 @@ def _one_iter(points, occlusion, target_points, target_occ, shape, expected_dist
 
     loss_occ = torch.mean(F.binary_cross_entropy_with_logits(
         occlusion, target_occ.to(dtype=occlusion.dtype), reduction="none"))
-    return loss_huber, loss_occ, loss_prob
+    return loss_pos_total, loss_occ, loss_prob, loss_jitter, loss_deform
 
 
 def tapir_loss_weighted(batch, output, position_loss_weight=0.05,
                         expected_dist_thresh=6.0, huber_delta=4.0,
                         occluded_weight=0.2, occluded_in_frame_only=True,
-                        occ_norm=False, occ_l1=False, reacq_share=0.0):
+                        occ_norm=False, occ_l1=False, reacq_share=0.0,
+                        jitter_weight=0.0, deform_weight=0.0):
     """Same total as the vendor's tapir_loss, refinement iterations included.
 
     `occ_norm=False` is the historical path and, at occluded_weight=0.0, reproduces the
@@ -215,21 +316,23 @@ def tapir_loss_weighted(batch, output, position_loss_weight=0.05,
     shape = batch["video"].shape
     tgt_p, tgt_o = batch["target_points"], batch["occluded"]
 
-    loss_huber, loss_occ, loss_prob = _one_iter(
+    loss_pos, loss_occ, loss_prob, l_jit, l_def = _one_iter(
         output["tracks"], output["occlusion"], tgt_p, tgt_o, shape,
         output.get("expected_dist"), position_loss_weight, expected_dist_thresh,
-        huber_delta, occluded_weight, occluded_in_frame_only, occ_norm, occ_l1, reacq_share)
-    loss = loss_huber + loss_occ + loss_prob
-    scalars = {"position_loss": loss_huber, "occlusion_loss": loss_occ,
-               "prob_loss": loss_prob}
+        huber_delta, occluded_weight, occluded_in_frame_only, occ_norm, occ_l1, reacq_share,
+        jitter_weight=jitter_weight, deform_weight=deform_weight)
+    loss = loss_pos + loss_occ + loss_prob
+    scalars = {"position_loss": loss_pos, "occlusion_loss": loss_occ,
+               "prob_loss": loss_prob, "jitter_loss": l_jit, "deform_loss": l_def}
 
     for l in range(len(output.get("unrefined_tracks", []))):
         ed = output["unrefined_expected_dist"][l] \
             if "unrefined_expected_dist" in output else None
-        h, o, p = _one_iter(
+        h, o, p, _, _ = _one_iter(
             output["unrefined_tracks"][l], output["unrefined_occlusion"][l],
             tgt_p, tgt_o, shape, ed, position_loss_weight, expected_dist_thresh,
-            huber_delta, occluded_weight, occluded_in_frame_only, occ_norm, occ_l1, reacq_share)
+            huber_delta, occluded_weight, occluded_in_frame_only, occ_norm, occ_l1, reacq_share,
+            jitter_weight=jitter_weight, deform_weight=deform_weight)
         loss = loss + h + o + p
 
     scalars["loss"] = loss

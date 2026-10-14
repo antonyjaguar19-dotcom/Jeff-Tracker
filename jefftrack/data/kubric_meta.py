@@ -167,6 +167,250 @@ def _crop_and_resize(video: np.ndarray, coords: np.ndarray, train_size: Tuple[in
     return out, c
 
 
+def _sample_flow_bilinear(flow: np.ndarray, coords: np.ndarray) -> np.ndarray:
+    """Sample 2D scalar field (H, W) at continuous (x, y) coordinates (N, 2)."""
+    H, W = flow.shape
+    x = np.clip(coords[:, 0], 0, W - 1)
+    y = np.clip(coords[:, 1], 0, H - 1)
+    x0 = np.floor(x).astype(int)
+    x1 = np.clip(x0 + 1, 0, W - 1)
+    y0 = np.floor(y).astype(int)
+    y1 = np.clip(y0 + 1, 0, H - 1)
+    wx = x - x0
+    wy = y - y0
+    v00 = flow[y0, x0]
+    v10 = flow[y0, x1]
+    v01 = flow[y1, x0]
+    v11 = flow[y1, x1]
+    v0 = v00 * (1 - wx) + v10 * wx
+    v1 = v01 * (1 - wx) + v11 * wx
+    return v0 * (1 - wy) + v1 * wy
+
+
+def _apply_camera_shake(video: np.ndarray, coords: np.ndarray,
+                        rng: np.random.Generator, p: float = 0.5) -> Tuple[np.ndarray, np.ndarray]:
+    """Synthetic camera shake and micro-jitter augmentation.
+
+    Warps frames with frame-to-frame micro-translations + rotations and updates GT coords
+    identically, forcing the model to learn correspondence invariant to camera chatter.
+    """
+    if rng.uniform() > p:
+        return video, coords
+    T, H, W = video.shape[:3]
+    cx, cy = W / 2.0, H / 2.0
+    ax, ay = rng.uniform(0.5, 2.0, size=2)
+    wx, wy = rng.uniform(0.5, 1.5, size=2)
+    px, py = rng.uniform(0, 2 * np.pi, size=2)
+    max_rot = rng.uniform(0.2, 0.8)
+
+    warped_video = []
+    c = coords.copy()
+    for t in range(T):
+        dx = ax * np.sin(wx * t + px) + rng.normal(0, 0.35)
+        dy = ay * np.cos(wy * t + py) + rng.normal(0, 0.35)
+        dtheta = max_rot * np.sin(wx * 0.7 * t + px)
+        M = cv2.getRotationMatrix2D((cx, cy), dtheta, 1.0)
+        M[0, 2] += dx
+        M[1, 2] += dy
+
+        frame_warped = cv2.warpAffine(video[t], M, (W, H), flags=cv2.INTER_LINEAR,
+                                      borderMode=cv2.BORDER_REFLECT101)
+        warped_video.append(frame_warped)
+
+        pts_hom = np.stack([c[:, t, 0], c[:, t, 1], np.ones(c.shape[0], dtype=np.float32)], axis=1)
+        c[:, t, :2] = (pts_hom @ M.T)[:, :2]
+
+    return np.stack(warped_video), c
+
+
+def _apply_elastic_deformation(video: np.ndarray, coords: np.ndarray,
+                               rng: np.random.Generator, p: float = 0.5) -> Tuple[np.ndarray, np.ndarray]:
+    """Smooth 2D non-rigid elastic surface deformation augmentation.
+
+    Simulates non-rigid surface deformations (cloth, skin, muscle flexion) by generating
+    time-varying harmonic bicubic flow fields. Frames are remapped and track coords are
+    updated via bilinear sampling.
+    """
+    if rng.uniform() > p:
+        return video, coords
+    T, H, W = video.shape[:3]
+    cg_x = rng.normal(0, rng.uniform(2.0, 4.0), (5, 5)).astype(np.float32)
+    cg_y = rng.normal(0, rng.uniform(2.0, 4.0), (5, 5)).astype(np.float32)
+    period = rng.uniform(16.0, 32.0)
+    phi = rng.uniform(0, 2 * np.pi)
+
+    grid_y, grid_x = np.indices((H, W), dtype=np.float32)
+    warped_video = []
+    c = coords.copy()
+    for t in range(T):
+        scale = np.sin(2 * np.pi * t / period + phi)
+        fx_coarse = cg_x * scale
+        fy_coarse = cg_y * scale
+        flow_x = cv2.resize(fx_coarse, (W, H), interpolation=cv2.INTER_CUBIC)
+        flow_y = cv2.resize(fy_coarse, (W, H), interpolation=cv2.INTER_CUBIC)
+
+        map_x = (grid_x - flow_x).astype(np.float32)
+        map_y = (grid_y - flow_y).astype(np.float32)
+        frame_warped = cv2.remap(video[t], map_x, map_y, cv2.INTER_LINEAR,
+                                 borderMode=cv2.BORDER_REFLECT101)
+        warped_video.append(frame_warped)
+
+        dx = _sample_flow_bilinear(flow_x, c[:, t, :2])
+        dy = _sample_flow_bilinear(flow_y, c[:, t, :2])
+        c[:, t, 0] += dx
+        c[:, t, 1] += dy
+
+    return np.stack(warped_video), c
+
+
+def _apply_smoke_simulation(video: np.ndarray, rng: np.random.Generator,
+                            p: float = 0.80) -> np.ndarray:
+    """Extreme Volumetric Multi-Layer VFX Smoke, Fire Plume & Distractor Simulation.
+
+    Simulates realistic fast-moving multi-layer billowing smoke with dual counter-flowing plumes,
+    extreme density (alpha up to 0.98), and vibrant chromatic tints (pink/magenta smoke bombs,
+    fire orange, dark soot). Trains the network to retain feature correspondence through near-total
+    obscuration without locking onto moving smoke edges or false background distractors.
+    """
+    if rng.uniform() > p:
+        return video
+    T, H, W = video.shape[:3]
+    # Primary plume parameters
+    vx1 = rng.uniform(-10.0, 10.0)
+    vy1 = rng.uniform(-14.0, 14.0)
+    billow_rate1 = rng.uniform(0.08, 0.30)
+    max_alpha1 = rng.uniform(0.70, 0.98)
+
+    # Chromatic palettes
+    pal_choice = rng.uniform()
+    if pal_choice < 0.35:
+        # Pink / Magenta VFX smoke bomb (matching Smoke1 plate)
+        smoke_color1 = np.array([rng.uniform(195, 250), rng.uniform(35, 85), rng.uniform(160, 230)], dtype=np.float32)
+    elif pal_choice < 0.60:
+        # Yellow / Orange flame smoke
+        smoke_color1 = np.array([rng.uniform(225, 255), rng.uniform(120, 185), rng.uniform(20, 60)], dtype=np.float32)
+    elif pal_choice < 0.80:
+        # White / Light gray steam
+        val = rng.uniform(200, 240)
+        smoke_color1 = np.array([val, val, val], dtype=np.float32)
+    else:
+        # Dark combustion soot
+        val = rng.uniform(25, 55)
+        smoke_color1 = np.array([val, val, val], dtype=np.float32)
+
+    # Primary fBm noise field
+    n1 = rng.uniform(0.0, 1.0, (8, 8)).astype(np.float32)
+    n2 = rng.uniform(0.0, 1.0, (16, 16)).astype(np.float32)
+    n3 = rng.uniform(0.0, 1.0, (32, 32)).astype(np.float32)
+    o1 = cv2.resize(n1, (W, H), interpolation=cv2.INTER_CUBIC)
+    o2 = cv2.resize(n2, (W, H), interpolation=cv2.INTER_CUBIC)
+    o3 = cv2.resize(n3, (W, H), interpolation=cv2.INTER_CUBIC)
+    alpha_base1 = 0.55 * o1 + 0.30 * o2 + 0.15 * o3
+    alpha_base1 = (alpha_base1 - alpha_base1.min()) / (alpha_base1.max() - alpha_base1.min() + 1e-6)
+
+    # Secondary counter-flowing plume layer (50% chance)
+    has_dual_layer = rng.uniform() < 0.50
+    if has_dual_layer:
+        vx2 = -vx1 * rng.uniform(0.6, 1.2)
+        vy2 = -vy1 * rng.uniform(0.6, 1.2)
+        billow_rate2 = rng.uniform(0.10, 0.25)
+        max_alpha2 = rng.uniform(0.40, 0.75)
+        smoke_color2 = np.array([215.0, 215.0, 215.0], dtype=np.float32)
+        n4 = rng.uniform(0.0, 1.0, (12, 12)).astype(np.float32)
+        alpha_base2 = cv2.resize(n4, (W, H), interpolation=cv2.INTER_CUBIC)
+    else:
+        vx2 = vy2 = billow_rate2 = max_alpha2 = 0.0
+        smoke_color2 = None
+        alpha_base2 = None
+
+    # Plume localization
+    has_plume_center = rng.uniform() < 0.60
+    if has_plume_center:
+        pcx, pcy = rng.uniform(W * 0.15, W * 0.85), rng.uniform(H * 0.15, H * 0.85)
+        pradius = rng.uniform(W * 0.30, W * 0.80)
+        gy, gx = np.ogrid[:H, :W]
+        dist_sq = (gx - pcx) ** 2 + (gy - pcy) ** 2
+        plume_mask = np.exp(-dist_sq / (2.0 * (pradius ** 2))).astype(np.float32)
+    else:
+        plume_mask = 1.0
+
+    out = []
+    for t in range(T):
+        cur_vx1 = vx1 * t + 3.5 * np.sin(billow_rate1 * t)
+        cur_vy1 = vy1 * t + 3.5 * np.cos(billow_rate1 * t)
+        M1 = np.float32([[1, 0, cur_vx1], [0, 1, cur_vy1]])
+        alpha1 = cv2.warpAffine(alpha_base1, M1, (W, H), borderMode=cv2.BORDER_REFLECT101)
+        a1 = np.clip(alpha1 * plume_mask * max_alpha1, 0.0, 1.0)[..., None]
+        f = video[t].astype(np.float32)
+        blended = (1.0 - a1) * f + a1 * smoke_color1
+
+        if has_dual_layer and alpha_base2 is not None:
+            cur_vx2 = vx2 * t + 2.5 * np.sin(billow_rate2 * t)
+            cur_vy2 = vy2 * t + 2.5 * np.cos(billow_rate2 * t)
+            M2 = np.float32([[1, 0, cur_vx2], [0, 1, cur_vy2]])
+            alpha2 = cv2.warpAffine(alpha_base2, M2, (W, H), borderMode=cv2.BORDER_REFLECT101)
+            a2 = np.clip(alpha2 * max_alpha2, 0.0, 1.0)[..., None]
+            blended = (1.0 - a2) * blended + a2 * smoke_color2
+
+        out.append(np.clip(blended, 0.0, 255.0).astype(np.uint8))
+    return np.stack(out)
+
+
+def _apply_fire_heat_haze(video: np.ndarray, rng: np.random.Generator,
+                          p: float = 0.4) -> np.ndarray:
+    """Fire and explosion luminance flares with thermal heat haze.
+
+    Adds localized high-intensity radial flame glow with 30-60 Hz temporal flicker,
+    forcing the model to ignore fire illumination spikes and maintain feature correspondence.
+    """
+    if rng.uniform() > p:
+        return video
+    T, H, W = video.shape[:3]
+    cx, cy = rng.uniform(W * 0.2, W * 0.8), rng.uniform(H * 0.3, H * 0.9)
+    radius = rng.uniform(50, 120)
+    glow_color = np.array([30.0, 140.0, 245.0], dtype=np.float32)
+
+    y, x = np.ogrid[:H, :W]
+    dist_sq = (x - cx) ** 2 + (y - cy) ** 2
+    radial_mask = (np.exp(-dist_sq / (2.0 * (radius ** 2)))[..., None]).astype(np.float32)
+
+    out = []
+    for t in range(T):
+        flicker = 0.8 + 0.3 * np.sin(t * 1.5)
+        f = video[t].astype(np.float32) + glow_color * radial_mask * flicker
+        out.append(np.clip(f, 0, 255).astype(np.uint8))
+    return np.stack(out)
+
+
+def _apply_water_specular_glints(video: np.ndarray, rng: np.random.Generator,
+                                p: float = 0.4) -> np.ndarray:
+    """Water splashes and moving specular highlights.
+
+    Renders independent moving specular glints that glide across the surface,
+    teaching the tracker to ignore deceptive moving reflections and caustics.
+    """
+    if rng.uniform() > p:
+        return video
+    T, H, W = video.shape[:3]
+    n_glints = int(rng.integers(12, 28))
+    gx = rng.uniform(10, W - 10, n_glints)
+    gy = rng.uniform(10, H - 10, n_glints)
+    gvx = rng.uniform(-2.5, 2.5, n_glints)
+    gvy = rng.uniform(-1.5, 3.5, n_glints)
+    gr = rng.integers(2, 5, n_glints)
+
+    out = []
+    for t in range(T):
+        frame = video[t].copy()
+        for i in range(n_glints):
+            cx = int(round(gx[i] + gvx[i] * t))
+            cy = int(round(gy[i] + gvy[i] * t))
+            if 0 <= cx < W and 0 <= cy < H:
+                cv2.circle(frame, (cx, cy), int(gr[i]), (255, 255, 255), -1)
+        out.append(frame)
+    return np.stack(out)
+
+
 def _pick_queries(coords: np.ndarray, occluded: np.ndarray, train_size: Tuple[int, int],
                   rng: np.random.Generator) -> Tuple[np.ndarray, np.ndarray]:
     """One query frame per track, drawn from the frames where it is visible and on screen.
@@ -195,7 +439,8 @@ def _pick_queries(coords: np.ndarray, occluded: np.ndarray, train_size: Tuple[in
 
 def _one_sample(shot: Shot, clip_len: int, tracks: int, train_size: Tuple[int, int],
                 rng: np.random.Generator, random_crop: bool, colour_aug: bool,
-                stride_max: int = 2):
+                stride_max: int = 2, shake_aug: bool = True, elastic_aug: bool = True,
+                vfx_aug: bool = True):
     """Build one training sample from one shot."""
     T = shot.n_frames
     # A stride > 1 turns a 120-frame shot into faster motion, which is closer to a handheld
@@ -218,6 +463,19 @@ def _one_sample(shot: Shot, clip_len: int, tracks: int, train_size: Tuple[int, i
 
     video, coords, occ = shot.read(frames, pts)
     video, coords = _crop_and_resize(video, coords, train_size, rng, random_crop)
+
+    # Option B: High-frequency camera shake + non-rigid elastic surface deformation
+    if shake_aug:
+        video, coords = _apply_camera_shake(video, coords, rng, p=0.5)
+    if elastic_aug:
+        video, coords = _apply_elastic_deformation(video, coords, rng, p=0.5)
+
+    # VFX Invariance: Smoke / Steam, Fire / Heat Haze, Water / Specular Glints
+    if vfx_aug:
+        video = _apply_smoke_simulation(video, rng, p=0.80)
+        video = _apply_fire_heat_haze(video, rng, p=0.4)
+        video = _apply_water_specular_glints(video, rng, p=0.4)
+
     q, dead = _pick_queries(coords, occ, train_size, rng)
 
     keep = np.flatnonzero(~dead)
@@ -268,7 +526,9 @@ def list_shots(cache_dir: str = DEFAULT_CACHE) -> List[str]:
 def batches(device: str = "cuda", cache_dir: str = DEFAULT_CACHE, batch_size: int = 1,
             tracks_to_sample: int = 256, clip_len: int = 24,
             train_size: Tuple[int, int] = (256, 256), color_augmentation: bool = True,
-            random_crop: bool = True, seed: int = 0, holdout: int = 0,
+            random_crop: bool = True, shake_augmentation: bool = True,
+            elastic_augmentation: bool = True, vfx_augmentation: bool = True,
+            seed: int = 0, holdout: int = 0,
             split: str = "train", workers: int = 4, prefetch: int = 4,
             **_ignored) -> Iterator[dict]:
     """Yield training batches as torch tensors on `device`, forever.
@@ -312,7 +572,10 @@ def batches(device: str = "cuda", cache_dir: str = DEFAULT_CACHE, batch_size: in
             while len(samples) < batch_size:
                 s = _one_sample(shots[rng.integers(0, len(shots))], clip_len,
                                 tracks_to_sample, train_size, rng, random_crop,
-                                color_augmentation)
+                                color_augmentation,
+                                shake_aug=shake_augmentation,
+                                elastic_aug=elastic_augmentation,
+                                vfx_aug=vfx_augmentation)
                 if s is not None:
                     samples.append(s)
             yield to_torch(samples)
@@ -333,7 +596,10 @@ def batches(device: str = "cuda", cache_dir: str = DEFAULT_CACHE, batch_size: in
                 while len(samples) < batch_size:
                     s = _one_sample(shots[rng.integers(0, len(shots))], clip_len,
                                     tracks_to_sample, train_size, rng, random_crop,
-                                    color_augmentation)
+                                    color_augmentation,
+                                    shake_aug=shake_augmentation,
+                                    elastic_aug=elastic_augmentation,
+                                    vfx_aug=vfx_augmentation)
                     if s is not None:
                         samples.append(s)
                 while not stop.is_set():
@@ -383,7 +649,8 @@ def _selftest(cache_dir: str = DEFAULT_CACHE) -> int:
     # workers=0: the checks below compare a batch against itself, so the reproducible
     # single-threaded path is the one to test on. The threaded path is exercised by --bench.
     it = batches(device="cpu", cache_dir=cache_dir, batch_size=2, tracks_to_sample=64,
-                 clip_len=12, color_augmentation=False, seed=3, workers=0)
+                 clip_len=12, color_augmentation=False, shake_augmentation=False,
+                 elastic_augmentation=False, seed=3, workers=0)
     b = next(it)
     want = {"video": (2, 12, 256, 256, 3), "query_points": (2, 64, 3),
             "target_points": (2, 64, 12, 2), "occluded": (2, 64, 12)}
@@ -440,6 +707,22 @@ def _selftest(cache_dir: str = DEFAULT_CACHE) -> int:
 
     hidden = float((occ == 1).mean())
     print("\n  occluded share of this batch: {:.1%}".format(hidden))
+
+    # Also exercise Option B augmentations (shake + elastic deformation)
+    it_aug = batches(device="cpu", cache_dir=cache_dir, batch_size=2, tracks_to_sample=64,
+                     clip_len=12, color_augmentation=True, shake_augmentation=True,
+                     elastic_augmentation=True, seed=7, workers=0)
+    b_aug = next(it_aug)
+    q_aug = b_aug["query_points"][0].numpy()
+    tp_aug = b_aug["target_points"][0].numpy()
+    qf_aug = q_aug[:, 0].astype(int)
+    at_query_aug = tp_aug[np.arange(len(tp_aug)), qf_aug]
+    d_aug = np.abs(at_query_aug - q_aug[:, [2, 1]]).max()
+    ok_aug = d_aug < 0.01
+    fails += (not ok_aug)
+    print("  augmented batch query == track at query frame {} (max {:.4f} px)".format(
+        "PASS" if ok_aug else "FAIL", d_aug))
+
     print("[selftest] {}".format("ALL PASS" if not fails else
                                  "{} FAILURES".format(fails)))
     return 1 if fails else 0

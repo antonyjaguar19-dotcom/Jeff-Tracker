@@ -310,7 +310,7 @@ def load_jefftrack(ckpt_path: str, model_size: str = "base",
         cross_layers = saved.get("cross_layers", cross_layers)
         num_proxies = int(saved.get("num_proxies", num_proxies))
         cross_heads = int(saved.get("cross_heads", cross_heads))
-        carry_state = bool(saved.get("carry_state", carry_state))
+        carry_state = carry_state or bool(saved.get("carry_state", False))
         pyramid_level = int(saved.get("pyramid_level", pyramid_level))
     model = JeffTracker(model_size=model_size, cross_layers=cross_layers,
                     num_proxies=num_proxies, cross_heads=cross_heads, zero_init=zero_init,

@@ -138,6 +138,10 @@ def main() -> int:
                          "--huber-delta, so a hidden point 2-3 px out -- the range this "
                          "model actually loses in -- is barely corrected. Visible keeps "
                          "Huber. Only meaningful with --occ-norm.")
+    ap.add_argument("--jitter-weight", type=float, default=0.1,
+                    help="Anti-jitter temporal acceleration loss weight to eliminate high-frequency chatter.")
+    ap.add_argument("--deform-weight", type=float, default=0.05,
+                    help="Non-rigid surface deformation relative neighbor distance loss weight.")
     ap.add_argument("--reacq-share", type=float, default=0.0,
                     help="Dedicated share of position loss applied to the first frame of "
                          "emergence from an occlusion (re-acquisition surge). Focuses "
@@ -244,7 +248,8 @@ def main() -> int:
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
     cfg = {"model_size": a.model_size, "num_proxies": a.num_proxies,
            "cross_heads": a.cross_heads, "cross_layers": None,
-           "carry_state": a.carry_state, "pyramid_level": a.pyramid_level,
+           "carry_state": getattr(model.torch_pips_mixer, "carry_state", a.carry_state),
+           "pyramid_level": a.pyramid_level,
            "base_ckpt": os.path.basename(a.base_ckpt), "res": a.res,
            "tracks": a.tracks, "dataset": a.dataset, "data_dir": a.data_dir,
            # The data a run saw travels with its weights, for the same reason the
@@ -253,6 +258,7 @@ def main() -> int:
            "data_source": a.data_source, "clip_len": a.clip_len, "holdout": a.holdout,
            "occ_pos_weight": a.occ_pos_weight, "occ_norm": bool(a.occ_norm),
            "occ_l1": bool(a.occ_l1),
+           "jitter_weight": float(a.jitter_weight), "deform_weight": float(a.deform_weight),
            "unfreeze_mixer": bool(a.unfreeze_mixer), "lr_decay": a.lr_decay,
            "ema": a.ema, "accum": a.accum, "lr": a.lr}
 
@@ -295,7 +301,9 @@ def main() -> int:
             loss, _ = tapir_loss_weighted(batch, out,
                                           occluded_weight=a.occ_pos_weight,
                                           occ_norm=a.occ_norm, occ_l1=a.occ_l1,
-                                          reacq_share=a.reacq_share)
+                                          reacq_share=a.reacq_share,
+                                          jitter_weight=a.jitter_weight,
+                                          deform_weight=a.deform_weight)
         (loss / a.accum).backward()
 
         running += float(loss.detach())

@@ -90,20 +90,51 @@ def huber_loss_weighted(tracks, target_points, occluded, delta=4.0,
     return loss * ((1.0 - occluded.float()) + occluded_weight * occ)
 
 
+def cauchy_loss(pred, gt, c=4.0):
+    """OmniMotion Cauchy (Lorentzian) robust loss: c^2 * log(1 + ||pred - gt||^2 / c^2).
+
+    Acts quadratically (like L2) for small sub-pixel errors, but has bounded sub-linear logarithmic
+    growth with a derivative approaching 0 for gross outliers (severe occlusions, smoke, camera jumps).
+    """
+    diff = pred - gt
+    distsqr = torch.sum(diff ** 2, dim=-1)
+    return (c ** 2) * torch.log(1.0 + distsqr / (c ** 2))
+
+
+def trimmed_mean(loss_tensor, mask, quantile=0.90):
+    """OmniMotion quantile trimming: trims top (1 - quantile) worst outlier errors from gradient computation."""
+    if mask is None or mask.sum() == 0:
+        return loss_tensor.mean()
+    valid = loss_tensor[mask > 0.5]
+    if valid.numel() == 0:
+        return torch.tensor(0.0, device=loss_tensor.device)
+    if quantile >= 1.0 or valid.numel() < 10:
+        return valid.mean()
+    cutoff = torch.quantile(valid.detach(), quantile)
+    keep = (valid <= cutoff)
+    if keep.sum() == 0:
+        return valid.mean()
+    return valid[keep].mean()
+
+
 def position_loss_normalised(tracks, target_points, occluded, delta=4.0,
                              occ_share=0.2, occluded_in_frame_only=True,
                              frame_size=256.0, margin=0.0, occ_l1=False,
-                             reacq_share=0.0):
+                             reacq_share=0.0, use_cauchy=False, loss_quantile=1.0):
     """Position loss whose occluded share is a STATED fraction, not an accident.
 
-    Optionally includes a Re-acquisition Surge Loss (reacq_share) applied directly to the
-    first frame of emergence (when a point transitions from occluded to visible).
-    Emergence frames carry critical information for matchmove track recovery.
+    Optionally integrates OmniMotion Cauchy robust loss (use_cauchy=True) and quantile
+    trimming (loss_quantile < 1.0) to eliminate outlier gradient spikes from severe smoke/occlusion.
     """
     error = tracks - target_points
     distsqr = torch.sum(error ** 2, dim=-1)
     dist = torch.sqrt(distsqr + 1e-12)
-    loss = torch.where(dist < delta, distsqr / 2, delta * (torch.abs(dist) - delta / 2))
+
+    if use_cauchy:
+        loss = cauchy_loss(tracks, target_points, c=delta)
+    else:
+        loss = torch.where(dist < delta, distsqr / 2, delta * (torch.abs(dist) - delta / 2))
+
     loss_occ_pop = dist if occ_l1 else loss
 
     occ = occluded.float()
@@ -114,12 +145,16 @@ def position_loss_normalised(tracks, target_points, occluded, delta=4.0,
         occ = occ * inside
     vis = 1.0 - occluded.float()
 
-    n_vis, n_occ = vis.sum(), occ.sum()
-    mean_vis = (loss * vis).sum() / torch.clamp(n_vis, min=1.0)
-    if float(n_occ) <= 0.0:
-        mean_occ = torch.tensor(0.0, device=tracks.device)
+    if loss_quantile < 1.0:
+        mean_vis = trimmed_mean(loss, vis, quantile=loss_quantile)
+        mean_occ = trimmed_mean(loss_occ_pop, occ, quantile=loss_quantile) if float(occ.sum()) > 0.0 else torch.tensor(0.0, device=tracks.device)
     else:
-        mean_occ = (loss_occ_pop * occ).sum() / n_occ
+        n_vis, n_occ = vis.sum(), occ.sum()
+        mean_vis = (loss * vis).sum() / torch.clamp(n_vis, min=1.0)
+        if float(n_occ) <= 0.0:
+            mean_occ = torch.tensor(0.0, device=tracks.device)
+        else:
+            mean_occ = (loss_occ_pop * occ).sum() / n_occ
 
     # Re-acquisition surge: frames transitioning from occluded (t-1) to visible (t)
     loss_reacq = torch.tensor(0.0, device=tracks.device)
@@ -130,7 +165,7 @@ def position_loss_normalised(tracks, target_points, occluded, delta=4.0,
         if float(n_reacq) > 0.0:
             loss_reacq = (dist * reacq_mask).sum() / n_reacq
 
-    if float(n_occ) <= 0.0:
+    if float(occ.sum()) <= 0.0:
         if reacq_share > 0.0:
             return (1.0 - reacq_share) * mean_vis + reacq_share * loss_reacq
         return mean_vis
@@ -257,7 +292,7 @@ def surface_deformation_loss(points: torch.Tensor, target_points: torch.Tensor,
 def _one_iter(points, occlusion, target_points, target_occ, shape, expected_dist,
               position_loss_weight, expected_dist_thresh, huber_delta, occluded_weight,
               occluded_in_frame_only, occ_norm=False, occ_l1=False, reacq_share=0.0,
-              jitter_weight=0.0, deform_weight=0.0):
+              jitter_weight=0.0, deform_weight=0.0, use_cauchy=False, loss_quantile=1.0):
     points = convert_grid_coordinates(points, shape[3:1:-1], (256, 256),
                                       coordinate_format="xy")
     target_points = convert_grid_coordinates(target_points, shape[3:1:-1], (256, 256),
@@ -268,7 +303,9 @@ def _one_iter(points, occlusion, target_points, target_occ, shape, expected_dist
             points, target_points, target_occ, delta=huber_delta,
             occ_share=occluded_weight, occ_l1=occ_l1,
             occluded_in_frame_only=occluded_in_frame_only,
-            reacq_share=reacq_share) * position_loss_weight
+            reacq_share=reacq_share,
+            use_cauchy=use_cauchy,
+            loss_quantile=loss_quantile) * position_loss_weight
     else:
         loss_huber = huber_loss_weighted(points, target_points, target_occ,
                                          delta=huber_delta,
@@ -304,7 +341,8 @@ def tapir_loss_weighted(batch, output, position_loss_weight=0.05,
                         expected_dist_thresh=6.0, huber_delta=4.0,
                         occluded_weight=0.2, occluded_in_frame_only=True,
                         occ_norm=False, occ_l1=False, reacq_share=0.0,
-                        jitter_weight=0.0, deform_weight=0.0):
+                        jitter_weight=0.0, deform_weight=0.0,
+                        use_cauchy=False, loss_quantile=1.0):
     """Same total as the vendor's tapir_loss, refinement iterations included.
 
     `occ_norm=False` is the historical path and, at occluded_weight=0.0, reproduces the
@@ -312,6 +350,7 @@ def tapir_loss_weighted(batch, output, position_loss_weight=0.05,
     it must keep holding. `occ_norm=True` switches to the per-population normalisation in
     position_loss_normalised, where occluded_weight is read as a SHARE of the position
     loss rather than a per-sample multiplier.
+    Optionally supports OmniMotion Cauchy loss and Quantile Trimming for outlier rejection.
     """
     shape = batch["video"].shape
     tgt_p, tgt_o = batch["target_points"], batch["occluded"]
@@ -320,7 +359,8 @@ def tapir_loss_weighted(batch, output, position_loss_weight=0.05,
         output["tracks"], output["occlusion"], tgt_p, tgt_o, shape,
         output.get("expected_dist"), position_loss_weight, expected_dist_thresh,
         huber_delta, occluded_weight, occluded_in_frame_only, occ_norm, occ_l1, reacq_share,
-        jitter_weight=jitter_weight, deform_weight=deform_weight)
+        jitter_weight=jitter_weight, deform_weight=deform_weight,
+        use_cauchy=use_cauchy, loss_quantile=loss_quantile)
     loss = loss_pos + loss_occ + loss_prob
     scalars = {"position_loss": loss_pos, "occlusion_loss": loss_occ,
                "prob_loss": loss_prob, "jitter_loss": l_jit, "deform_loss": l_def}
@@ -332,7 +372,8 @@ def tapir_loss_weighted(batch, output, position_loss_weight=0.05,
             output["unrefined_tracks"][l], output["unrefined_occlusion"][l],
             tgt_p, tgt_o, shape, ed, position_loss_weight, expected_dist_thresh,
             huber_delta, occluded_weight, occluded_in_frame_only, occ_norm, occ_l1, reacq_share,
-            jitter_weight=jitter_weight, deform_weight=deform_weight)
+            jitter_weight=jitter_weight, deform_weight=deform_weight,
+            use_cauchy=use_cauchy, loss_quantile=loss_quantile)
         loss = loss + h + o + p
 
     scalars["loss"] = loss

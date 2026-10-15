@@ -70,12 +70,15 @@ class Shot:
         self._hw: Optional[Tuple[int, int]] = None
 
     def _peek(self) -> None:
-        if self._n_frames >= 0:
+        if self._n_points >= 0:
             return
         with np.load(self.path) as z:
-            self._n_frames = int(len(z["frames_off"]) - 1)
-            self._n_points = int(z["coords"].shape[0])
-            self._hw = (int(z["height"]), int(z["width"]))
+            nf = int(len(z["frames_off"]) - 1)
+            np_pts = int(z["coords"].shape[0])
+            hw = (int(z["height"]), int(z["width"]))
+            self._hw = hw
+            self._n_frames = nf
+            self._n_points = np_pts
 
     @property
     def n_frames(self) -> int:
@@ -261,6 +264,84 @@ def _apply_elastic_deformation(video: np.ndarray, coords: np.ndarray,
         c[:, t, 1] += dy
 
     return np.stack(warped_video), c
+
+
+def _apply_3d_turn_scale_shift(video: np.ndarray, coords: np.ndarray, occ: np.ndarray,
+                               rng: np.random.Generator, p: float = 0.60):
+    """Synthetic 3D-Rotation, Perspective Foreshortening & Rapid Scale-Shift.
+
+    Simulates rapid out-of-plane 3D turns (up to 65 deg yaw/pitch) and dynamic zooming/recession
+    (scale shift from 0.35x to 1.8x), exactly matching real-world action footage like bikes,
+    vehicles, and dancers turning away from or towards the camera.
+    """
+    if rng.uniform() > p:
+        return video, coords, occ
+    T, H, W = video.shape[:3]
+    c = coords.copy()
+    o = occ.copy()
+
+    # Center of rotation / scaling
+    cx = rng.uniform(W * 0.3, W * 0.7)
+    cy = rng.uniform(H * 0.3, H * 0.7)
+
+    # 3D rotation angles (yaw around Y axis, pitch around X axis)
+    max_yaw = np.radians(rng.uniform(25.0, 65.0)) * rng.choice([-1.0, 1.0])
+    max_pitch = np.radians(rng.uniform(10.0, 30.0)) * rng.choice([-1.0, 1.0])
+    # Scale shift (e.g. object driving away: 1.0 -> 0.4, or approaching: 1.0 -> 1.8)
+    scale_target = rng.uniform(0.35, 1.8)
+
+    # Focal length in pixels
+    f = max(H, W) * rng.uniform(1.0, 2.0)
+
+    # Intrinsics
+    K = np.array([[f, 0, cx],
+                  [0, f, cy],
+                  [0, 0, 1]], dtype=np.float64)
+    K_inv = np.linalg.inv(K)
+
+    warped_video = []
+    for t in range(T):
+        prog = float(t) / max(1, T - 1)
+        # Smooth ease-in-out profile
+        alpha = 0.5 * (1.0 - np.cos(np.pi * prog))
+        yaw = max_yaw * alpha
+        pitch = max_pitch * alpha
+        s = 1.0 + (scale_target - 1.0) * alpha
+
+        # 3D Rotation matrices
+        Ry = np.array([[np.cos(yaw), 0, np.sin(yaw)],
+                       [0, 1, 0],
+                       [-np.sin(yaw), 0, np.cos(yaw)]], dtype=np.float64)
+        Rx = np.array([[1, 0, 0],
+                       [0, np.cos(pitch), -np.sin(pitch)],
+                       [0, np.sin(pitch), np.cos(pitch)]], dtype=np.float64)
+        R = Ry @ Rx
+
+        # Scale transform in normalized camera frame
+        S = np.diag([s, s, 1.0])
+
+        # Planar homography: H = K @ S @ R @ K_inv
+        H_mat = K @ S @ R @ K_inv
+        H_mat = H_mat / H_mat[2, 2]
+
+        # Warp image
+        frame_w = cv2.warpPerspective(video[t], H_mat, (W, H), flags=cv2.INTER_LINEAR,
+                                      borderMode=cv2.BORDER_REFLECT101)
+        warped_video.append(frame_w)
+
+        # Transform coordinates: (x, y, 1) -> H_mat @ (x, y, 1)
+        pts_t = c[:, t, :2]
+        homo_pts = np.pad(pts_t, ((0, 0), (0, 1)), constant_values=1.0)
+        warped_pts = (H_mat @ homo_pts.T).T
+        z = warped_pts[:, 2:3]
+        valid_z = (np.abs(z) > 1e-4).ravel()
+        c[valid_z, t, :2] = warped_pts[valid_z, :2] / z[valid_z]
+
+        # Points transformed outside the frame are flagged as occluded
+        off_screen = (c[:, t, 0] < 0) | (c[:, t, 0] >= W) | (c[:, t, 1] < 0) | (c[:, t, 1] >= H)
+        o[off_screen, t] = 1.0
+
+    return np.stack(warped_video), c, o
 
 
 def _apply_smoke_simulation(video: np.ndarray, rng: np.random.Generator,
@@ -470,6 +551,9 @@ def _one_sample(shot: Shot, clip_len: int, tracks: int, train_size: Tuple[int, i
     if elastic_aug:
         video, coords = _apply_elastic_deformation(video, coords, rng, p=0.5)
 
+    # 3D Turn, Perspective Foreshortening & Dynamic Scale Shifts (e.g. bike/dancer turning away or approaching)
+    video, coords, occ = _apply_3d_turn_scale_shift(video, coords, occ, rng, p=0.60)
+
     # VFX Invariance: Smoke / Steam, Fire / Heat Haze, Water / Specular Glints
     if vfx_aug:
         video = _apply_smoke_simulation(video, rng, p=0.80)
@@ -556,6 +640,8 @@ def batches(device: str = "cuda", cache_dir: str = DEFAULT_CACHE, batch_size: in
     samples in a reproducible order for a given seed.
     """
     shots = [Shot(p) for p in list_shots(cache_dir)]
+    for s in shots:
+        s._peek()
     if holdout:
         if holdout >= len(shots):
             raise SystemExit("[ERROR] holdout {} >= {} shots".format(holdout, len(shots)))

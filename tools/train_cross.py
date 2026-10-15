@@ -163,6 +163,10 @@ def main() -> int:
     ap.add_argument("--save-every", type=int, default=1000)
     ap.add_argument("--log-every", type=int, default=25)
     ap.add_argument("--bf16", action="store_true", default=True)
+    ap.add_argument("--use-cauchy", action="store_true",
+                    help="OmniMotion Lorentzian/Cauchy robust loss log(1 + (e/c)^2) to eliminate outlier gradient spikes.")
+    ap.add_argument("--loss-quantile", type=float, default=1.0,
+                    help="OmniMotion quantile trimming (e.g. 0.90 drops top 10% worst outlier losses from gradient).")
     ap.add_argument("--fp32", dest="bf16", action="store_false")
     a = ap.parse_args()
 
@@ -324,7 +328,9 @@ def main() -> int:
                                           occ_norm=a.occ_norm, occ_l1=a.occ_l1,
                                           reacq_share=a.reacq_share,
                                           jitter_weight=a.jitter_weight,
-                                          deform_weight=a.deform_weight)
+                                          deform_weight=a.deform_weight,
+                                          use_cauchy=a.use_cauchy,
+                                          loss_quantile=a.loss_quantile)
         (loss / a.accum).backward()
 
         running += float(loss.detach())

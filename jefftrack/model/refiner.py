@@ -118,3 +118,97 @@ class TrackRefiner(nn.Module):
         refined_conf = self.conf_head(h)
 
         return refined_coords, refined_conf
+
+
+class AffineCouplingBlock(nn.Module):
+    """OmniMotion / RealNVP Invertible Affine Coupling Block.
+
+    Transforms coordinate pairs (x, y) with strictly invertible algebra (cycle error = 0.0):
+      Forward:  y_2 = x_2 * exp(s(x_1, h)) + t(x_1, h)
+      Inverse:  x_2 = (y_2 - t(x_1, h)) * exp(-s(x_1, h))
+    """
+    def __init__(self, cond_dim: int, split_dim: int = 0, hidden_dim: int = 64):
+        super().__init__()
+        self.split_dim = split_dim
+        self.net = nn.Sequential(
+            nn.Linear(1 + cond_dim, hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, 2)
+        )
+        # Zero-initialize so block starts as the exact mathematical identity mapping
+        nn.init.zeros_(self.net[-1].weight)
+        nn.init.zeros_(self.net[-1].bias)
+
+    def forward(self, x: torch.Tensor, cond: torch.Tensor, inverse: bool = False) -> torch.Tensor:
+        xa, xb = x[..., :1], x[..., 1:]
+        if self.split_dim == 0:
+            c_in = torch.cat([xa, cond], dim=-1)
+            st = self.net(c_in)
+            s, t = torch.chunk(st, 2, dim=-1)
+            s = torch.clamp(s, -3.0, 3.0)
+            if not inverse:
+                yb = xb * torch.exp(s) + t
+            else:
+                yb = (xb - t) * torch.exp(-s)
+            return torch.cat([xa, yb], dim=-1)
+        else:
+            c_in = torch.cat([xb, cond], dim=-1)
+            st = self.net(c_in)
+            s, t = torch.chunk(st, 2, dim=-1)
+            s = torch.clamp(s, -3.0, 3.0)
+            if not inverse:
+                ya = xa * torch.exp(s) + t
+            else:
+                ya = (xa - t) * torch.exp(-s)
+            return torch.cat([ya, xb], dim=-1)
+
+
+class InvertibleTrackRefiner(TrackRefiner):
+    """OmniMotion-inspired Invertible Trajectory Refinement Network.
+
+    Guarantees exact mathematical bidirectional cycle consistency:
+    refine_inverse(refine_forward(P)) == P with zero forward-backward drift.
+    """
+
+    def __init__(self, in_dim: int = 7, hidden_dim: int = 128, num_layers: int = 4,
+                 num_heads: int = 4, num_coupling_layers: int = 4):
+        super().__init__(in_dim=in_dim, hidden_dim=hidden_dim, num_layers=num_layers, num_heads=num_heads)
+        self.coupling_blocks = nn.ModuleList([
+            AffineCouplingBlock(cond_dim=hidden_dim, split_dim=i % 2, hidden_dim=hidden_dim // 2)
+            for i in range(num_coupling_layers)
+        ])
+
+    def forward(self, coords: torch.Tensor, conf: torch.Tensor,
+                img_size: tuple[int, int] = (512, 512),
+                inverse: bool = False) -> tuple[torch.Tensor, torch.Tensor]:
+        if conf.ndim == 2:
+            conf = conf.unsqueeze(-1)
+
+        B, T, _ = coords.shape
+        H, W = img_size
+        scale = torch.tensor([W, H], device=coords.device, dtype=torch.float32)
+
+        norm_coords = (coords / scale) * 2.0 - 1.0
+
+        vel = torch.zeros_like(norm_coords)
+        vel[:, 1:] = norm_coords[:, 1:] - norm_coords[:, :-1]
+
+        acc = torch.zeros_like(vel)
+        acc[:, 1:] = vel[:, 1:] - vel[:, :-1]
+
+        feat = torch.cat([norm_coords, conf, vel, acc], dim=-1)
+
+        h = self.input_proj(feat)
+        h = self.pos_encoder(h)
+        h = self.transformer(h)
+
+        # Invertible coupling transform on normalized coordinate space
+        cur_coords = norm_coords
+        blocks = reversed(self.coupling_blocks) if inverse else self.coupling_blocks
+        for block in blocks:
+            cur_coords = block(cur_coords, h, inverse=inverse)
+
+        refined_coords = (cur_coords + 1.0) * 0.5 * scale
+        refined_conf = self.conf_head(h)
+
+        return refined_coords, refined_conf

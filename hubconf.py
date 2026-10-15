@@ -85,17 +85,25 @@ def jefftracker(pretrained: bool = True, model_res=(256, 256), device: str = "cu
               ckpt: str = None, **kw):
     """Jeff-Tracker -- LocoTrack-B plus cross-track attention.
 
-    The default weights are `jefftrack_reacq_v2_smooth.ckpt`: fine-tuned on Kubric
-    with Anti-Jitter Temporal Acceleration Loss, Surface Deformation Consistency,
-    and Re-acquisition Surge Loss.
+    The default weights are `jefftrack_large_v3.ckpt`: widened architecture (17.1M trainable
+    parameters, unfrozen visual backbone, 64 proxy cross-attention tokens, 4 pyramid levels)
+    fine-tuned on Kubric streaming with Surface Deformation Consistency and Anti-Jitter loss.
     """
     from jefftrack.engine import JeffTrackEngine              # noqa: PLC0415
-    preferred = "jefftrack_reacq_v2_smooth.ckpt"
-    local_p = os.path.join(HERE, "weights", preferred)
-    default_name = preferred if os.path.isfile(local_p) else "jefftrack_reacq_stream.ckpt"
+    large_p = os.path.join(HERE, "weights", "jefftrack_large_v3.ckpt")
+    v2_p = os.path.join(HERE, "weights", "jefftrack_reacq_v2_smooth.ckpt")
+    default_name = "jefftrack_large_v3.ckpt" if os.path.isfile(large_p) else ("jefftrack_reacq_v2_smooth.ckpt" if os.path.isfile(v2_p) else "jefftrack_reacq_stream.ckpt")
     path = ckpt or (_resolve_checkpoint(default_name) if pretrained else None)
     return JeffTrackEngine(device=device, model_size="base", ckpt=path,
                          model_res=model_res, arch="jefftrack", **kw)
+
+
+def jefftracker_large_v3(pretrained: bool = True, model_res=(256, 256), device: str = "cuda",
+                         ckpt: str = None, **kw):
+    """Explicit entry point for the widened JeffTrack-Large v3 model."""
+    preferred = "jefftrack_large_v3.ckpt"
+    path = ckpt or (_resolve_checkpoint(preferred) if pretrained else None)
+    return jefftracker(pretrained=pretrained, model_res=model_res, device=device, ckpt=path, **kw)
 
 
 def jefftracker_reacq_v2_smooth(pretrained: bool = True, model_res=(256, 256), device: str = "cuda",

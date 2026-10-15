@@ -101,11 +101,12 @@ def cauchy_loss(pred, gt, c=4.0):
     return (c ** 2) * torch.log(1.0 + distsqr / (c ** 2))
 
 
-def trimmed_mean(loss_tensor, mask, quantile=0.90):
+def trimmed_mean(loss_tensor, mask=None, quantile=0.90):
     """OmniMotion quantile trimming: trims top (1 - quantile) worst outlier errors from gradient computation."""
-    if mask is None or mask.sum() == 0:
-        return loss_tensor.mean()
-    valid = loss_tensor[mask > 0.5]
+    if mask is not None:
+        valid = loss_tensor[mask > 0.5]
+    else:
+        valid = loss_tensor.flatten()
     if valid.numel() == 0:
         return torch.tensor(0.0, device=loss_tensor.device)
     if quantile >= 1.0 or valid.numel() < 10:

@@ -333,14 +333,22 @@ def _apply_3d_turn_scale_shift(video: np.ndarray, coords: np.ndarray, occ: np.nd
         pts_t = c[:, t, :2]
         homo_pts = np.pad(pts_t, ((0, 0), (0, 1)), constant_values=1.0)
         warped_pts = (H_mat @ homo_pts.T).T
-        z = warped_pts[:, 2:3]
-        valid_z = (np.abs(z) > 1e-4).ravel()
-        c[valid_z, t, :2] = warped_pts[valid_z, :2] / z[valid_z]
+        z = warped_pts[:, 2]
+        valid_z = (z > 0.05) & np.isfinite(z)
+        
+        # Points with valid positive depth get projected
+        if np.any(valid_z):
+            proj_x = warped_pts[valid_z, 0] / z[valid_z]
+            proj_y = warped_pts[valid_z, 1] / z[valid_z]
+            c[valid_z, t, 0] = proj_x
+            c[valid_z, t, 1] = proj_y
 
-        # Points transformed outside the frame are flagged as occluded
-        off_screen = (c[:, t, 0] < 0) | (c[:, t, 0] >= W) | (c[:, t, 1] < 0) | (c[:, t, 1] >= H)
-        o[off_screen, t] = 1.0
+        # Points behind camera plane or outside image boundary are marked occluded
+        off_screen = (~valid_z) | (c[:, t, 0] < 0) | (c[:, t, 0] >= W) | (c[:, t, 1] < 0) | (c[:, t, 1] >= H) | np.isnan(c[:, t, 0]) | np.isnan(c[:, t, 1])
+        o[off_screen, t] = True
 
+    # Sanitize any accidental NaNs
+    np.nan_to_num(c, copy=False, nan=0.0, posinf=float(max(H, W)), neginf=0.0)
     return np.stack(warped_video), c, o
 
 
@@ -544,6 +552,7 @@ def _one_sample(shot: Shot, clip_len: int, tracks: int, train_size: Tuple[int, i
 
     video, coords, occ = shot.read(frames, pts)
     video, coords = _crop_and_resize(video, coords, train_size, rng, random_crop)
+    video_clean, coords_clean, occ_clean = video.copy(), coords.copy(), occ.copy()
 
     # Option B: High-frequency camera shake + non-rigid elastic surface deformation
     if shake_aug:
@@ -563,11 +572,22 @@ def _one_sample(shot: Shot, clip_len: int, tracks: int, train_size: Tuple[int, i
     q, dead = _pick_queries(coords, occ, train_size, rng)
 
     keep = np.flatnonzero(~dead)
+    if len(keep) == 0:
+        # Fall back to un-warped clean crop so valid tracks are guaranteed
+        coords = coords_clean
+        occ = occ_clean
+        video = video_clean
+        q, dead = _pick_queries(coords, occ, train_size, rng)
+        keep = np.flatnonzero(~dead)
+
     if len(keep) < tracks:
         if len(keep) == 0:
-            return None
-        # Pad by repeating -- rare, and better than a short batch that cannot stack.
-        keep = np.concatenate([keep, rng.choice(keep, size=tracks - len(keep))])
+            # Absolute emergency fallback: select first N points
+            keep = np.arange(tracks) % len(pts)
+            q = np.zeros((tracks, 3), dtype=np.float32)
+            q[:, 1:] = coords[keep, 0]
+        else:
+            keep = np.concatenate([keep, rng.choice(keep, size=tracks - len(keep))])
     else:
         keep = keep[rng.permutation(len(keep))[:tracks]]
 
@@ -690,9 +710,10 @@ def batches(device: str = "cuda", cache_dir: str = DEFAULT_CACHE, batch_size: in
                         samples.append(s)
                 while not stop.is_set():
                     try:
-                        q.put(samples, timeout=0.5)
+                        q.put(samples, timeout=0.2)
                         break
                     except queue.Full:
+                        time.sleep(0.01)
                         continue
             except Exception as exc:                      # noqa: BLE001
                 # A dead reader thread must not present as a hang. Push the failure so the

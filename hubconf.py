@@ -142,3 +142,20 @@ def locotrack(pretrained: bool = True, model_res=(256, 256), device: str = "cuda
                          repo_type="dataset")
     return JeffTrackEngine(device=device, model_size="base", ckpt=path,
                          model_res=model_res, arch="locotrack", **kw)
+
+
+def jefftracker_dual(pretrained: bool = True, model_res=(256, 256), device: str = "cuda",
+                     agile_ckpt: str = None, smoke_ckpt: str = None, ckpt: str = None, **kw):
+    """Dual-Expert Mixture-of-Experts (MoE) Tracking Engine.
+
+    Keeps both the agile kinetic model and the disturbance-invariant smoke model
+    concurrently in GPU memory and dynamically routes per track.
+    """
+    from jefftrack.expert_engine import DualExpertEngine      # noqa: PLC0415
+    agile_p = agile_ckpt or os.path.join(HERE, "weights", "jefftrack_reacq_stream.ckpt")
+    if not os.path.isfile(agile_p):
+        agile_p = os.path.join(HERE, "weights", "locotrack_base.ckpt")
+    smoke_p = smoke_ckpt or ckpt or os.path.join(HERE, "weights", "jefftrack_large_v3.ckpt")
+    return DualExpertEngine(agile_ckpt=agile_p, smoke_ckpt=smoke_p, device=device,
+                            model_res=model_res, **kw)
+

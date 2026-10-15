@@ -156,113 +156,59 @@ class DualExpertEngine:
             self.last_routing_info = {"mode": expert_mode, "selected": ["smoke"] * tr.shape[1]}
             return tr, vis, conf
 
-        # --- Automatic Multi-Weight Routing Mode ('auto') ---
-        # 1. Run inference on both experts
-        tr_a, vis_a, conf_a = self.expert_agile.track_queries_conf(frames_bgr, queries, fp16=fp16)
-        tr_s, vis_s, conf_s = self.expert_smoke.track_queries_conf(frames_bgr, queries, fp16=fp16)
-
-        T, N, _ = tr_a.shape
+        # --- Smart Neural Routing Mode ('auto' or 'smart') ---
+        # 1. Inspect each seed point in < 1 millisecond using the trained SmartRouter
+        from .router import predict_expert_for_seed
         q = np.asarray(queries, np.float32).reshape(-1, 3)
-
-        out_tr = np.zeros_like(tr_a)
-        out_vis = np.zeros_like(vis_a)
-        out_conf = np.zeros_like(conf_a)
+        N = q.shape[0]
+        T = len(frames_bgr)
         selected_experts = []
-        scores_breakdown = {}
+        conf_preds = []
 
-        # Convert sample frames to grayscale for rapid photometric patch check
-        sample_indices = np.linspace(0, T - 1, min(T, 12), dtype=int)
-        grays = {}
-        for s_idx in sample_indices:
-            fr = frames_bgr[s_idx]
-            grays[s_idx] = cv2.cvtColor(fr, cv2.COLOR_BGR2GRAY) if fr.ndim == 3 else fr
-
-        r = 9  # patch radius (19x19 patch)
+        f0_bgr = frames_bgr[int(q[0, 0])] if T > 0 else None
+        f1_idx = min(T - 1, int(q[0, 0]) + 1)
+        f1_bgr = frames_bgr[f1_idx] if T > 1 else f0_bgr
 
         for i in range(N):
             q_fr = int(np.clip(q[i, 0], 0, T - 1))
-            seed_x, seed_y = float(q[i, 1]), float(q[i, 2])
+            f_curr0 = frames_bgr[q_fr]
+            f_curr1 = frames_bgr[min(T - 1, q_fr + 1)]
+            exp_name, conf = predict_expert_for_seed(f_curr0, f_curr1, (q[i, 1], q[i, 2]), device=self.device)
+            selected_experts.append(exp_name)
+            conf_preds.append(conf)
 
-            # Extract seed reference patch
-            if q_fr not in grays:
-                fr_seed = frames_bgr[q_fr]
-                grays[q_fr] = cv2.cvtColor(fr_seed, cv2.COLOR_BGR2GRAY) if fr_seed.ndim == 3 else fr_seed
+        # 2. If all queries agree (e.g. single point or all agile / all smoke):
+        # Run ONLY the winning expert model at full 1x speed (32.8 FPS)!
+        unique_experts = set(selected_experts)
+        if len(unique_experts) == 1:
+            chosen = selected_experts[0]
+            print(f"[SmartRouter] Auto-routed {N} query(ies) -> Expert: '{chosen}' ({conf_preds[0]*100:.1f}% confidence)")
+            eng = self.expert_smoke if chosen in ("smoke", "large", "large_v3") else self.expert_agile
+            tr, vis, conf = eng.track_queries_conf(frames_bgr, queries, fp16=fp16)
+            self.last_routing_info = {"mode": "smart", "selected": selected_experts, "conf": conf_preds}
+            return tr, vis, conf
 
-            g_seed = grays[q_fr]
-            H_g, W_g = g_seed.shape[:2]
-            sx_i, sy_i = int(round(seed_x)), int(round(seed_y))
-            if (sx_i - r >= 0 and sx_i + r + 1 <= W_g and sy_i - r >= 0 and sy_i + r + 1 <= H_g):
-                ref_patch = g_seed[sy_i - r:sy_i + r + 1, sx_i - r:sx_i + r + 1].astype(np.float32)
-            else:
-                ref_patch = np.zeros((2 * r + 1, 2 * r + 1), dtype=np.float32)
+        # 3. If heterogeneous queries (e.g. point 1 is eyeball, point 2 is smoke):
+        # Track each query with its specialized expert and assemble the result
+        print(f"[SmartRouter] Heterogeneous queries detected: {selected_experts.count('agile')} Agile, {selected_experts.count('smoke')} Smoke")
+        out_tr = np.zeros((T, N, 2), dtype=np.float32)
+        out_vis = np.zeros((T, N), dtype=bool)
+        out_conf = np.zeros((T, N), dtype=np.float32)
 
-            # Evaluate Expert A (Agile)
-            ncc_a_list = []
-            for s_idx in sample_indices:
-                if s_idx == q_fr:
-                    continue
-                pt_a = tr_a[s_idx, i]
-                score_ncc = _calc_patch_ncc(grays[s_idx], (pt_a[0], pt_a[1]), ref_patch, r=r)
-                ncc_a_list.append(score_ncc)
-            mean_ncc_a = float(np.mean(ncc_a_list)) if ncc_a_list else 0.5
-            mean_conf_a = float(np.mean(conf_a[:, i]))
+        agile_indices = [i for i, exp in enumerate(selected_experts) if exp == "agile"]
+        smoke_indices = [i for i, exp in enumerate(selected_experts) if exp != "agile"]
 
-            # Acceleration / jitter penalty for Expert A
-            acc_a = np.linalg.norm(tr_a[2:, i] - 2 * tr_a[1:-1, i] + tr_a[:-2, i], axis=-1) if T >= 3 else [0.0]
-            jitter_a = float(np.mean(acc_a))
+        if agile_indices:
+            tr_a, v_a, c_a = self.expert_agile.track_queries_conf(frames_bgr, queries[agile_indices], fp16=fp16)
+            out_tr[:, agile_indices] = tr_a
+            out_vis[:, agile_indices] = v_a
+            out_conf[:, agile_indices] = c_a
 
-            # Evaluate Expert S (Smoke / Large-v3)
-            ncc_s_list = []
-            for s_idx in sample_indices:
-                if s_idx == q_fr:
-                    continue
-                pt_s = tr_s[s_idx, i]
-                score_ncc = _calc_patch_ncc(grays[s_idx], (pt_s[0], pt_s[1]), ref_patch, r=r)
-                ncc_s_list.append(score_ncc)
-            mean_ncc_s = float(np.mean(ncc_s_list)) if ncc_s_list else 0.5
-            mean_conf_s = float(np.mean(conf_s[:, i]))
+        if smoke_indices:
+            tr_s, v_s, c_s = self.expert_smoke.track_queries_conf(frames_bgr, queries[smoke_indices], fp16=fp16)
+            out_tr[:, smoke_indices] = tr_s
+            out_vis[:, smoke_indices] = v_s
+            out_conf[:, smoke_indices] = c_s
 
-            # Acceleration / jitter penalty for Expert S
-            acc_s = np.linalg.norm(tr_s[2:, i] - 2 * tr_s[1:-1, i] + tr_s[:-2, i], axis=-1) if T >= 3 else [0.0]
-            jitter_s = float(np.mean(acc_s))
-
-            # Composite Quality Metric:
-            # 50% Photometric Patch Fidelity (NCC)
-            # 40% Continuous Neural Confidence
-            # 10% Temporal Stability
-            q_score_a = 0.50 * max(0.0, mean_ncc_a) + 0.40 * mean_conf_a + 0.10 / (1.0 + 0.05 * jitter_a)
-            q_score_s = 0.50 * max(0.0, mean_ncc_s) + 0.40 * mean_conf_s + 0.10 / (1.0 + 0.05 * jitter_s)
-
-            # Decision rule:
-            # Large-v3 (Smoke expert) handles heavy smoke and occlusions where NCC drops for both.
-            # When NCC is low (< 0.25) because of visual degradation (smoke/shadow), higher neural confidence wins!
-            # When NCC is strong (clear feature, eyes, high contrast), patch fidelity takes top priority!
-            if (mean_ncc_a < 0.25 and mean_ncc_s < 0.25):
-                use_expert = "smoke" if mean_conf_s >= mean_conf_a else "agile"
-            else:
-                use_expert = "agile" if q_score_a >= q_score_s else "smoke"
-
-            selected_experts.append(use_expert)
-            scores_breakdown[i] = {
-                "expert": use_expert,
-                "agile": {"ncc": mean_ncc_a, "conf": mean_conf_a, "jitter": jitter_a, "score": q_score_a},
-                "smoke": {"ncc": mean_ncc_s, "conf": mean_conf_s, "jitter": jitter_s, "score": q_score_s},
-            }
-
-            if use_expert == "agile":
-                out_tr[:, i] = tr_a[:, i]
-                out_vis[:, i] = vis_a[:, i]
-                out_conf[:, i] = conf_a[:, i]
-            else:
-                out_tr[:, i] = tr_s[:, i]
-                out_vis[:, i] = vis_s[:, i]
-                out_conf[:, i] = conf_s[:, i]
-
-        self.last_routing_info = {
-            "mode": "auto",
-            "selected": selected_experts,
-            "breakdown": scores_breakdown,
-        }
-
-        print(f"[DualExpert] Routed {N} track(s): {selected_experts.count('agile')} Agile, {selected_experts.count('smoke')} Smoke/Large")
+        self.last_routing_info = {"mode": "smart", "selected": selected_experts, "conf": conf_preds}
         return out_tr, out_vis, out_conf

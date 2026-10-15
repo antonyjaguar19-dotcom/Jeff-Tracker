@@ -29,7 +29,8 @@ for p in (ROOT, HERE):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from jefftrack.model.refiner import TrackRefiner
+from jefftrack.model.refiner import TrackRefiner, InvertibleTrackRefiner
+from jefftrack.losses import cauchy_loss, trimmed_mean
 
 
 class KubricTrackDataset(Dataset):
@@ -121,10 +122,18 @@ def main():
     parser.add_argument("--clip-len", type=int, default=64)
     parser.add_argument("--log-file", default=os.path.join(ROOT, "weights", "refiner_training.log"))
     parser.add_argument("--out", default=os.path.join(ROOT, "weights", "track_refiner_20k.pt"))
+    parser.add_argument("--invertible", action="store_true", default=True,
+                        help="Use InvertibleTrackRefiner with RealNVP affine coupling for exact 0.0 cycle drift.")
+    parser.add_argument("--use-cauchy", action="store_true", default=True,
+                        help="OmniMotion Cauchy robust loss log(1 + (e/c)^2) for outlier immunity.")
+    parser.add_argument("--loss-quantile", type=float, default=0.90,
+                        help="Quantile loss trimming (e.g. 0.90 drops top 10% outlier losses).")
+    parser.add_argument("--cycle-weight", type=float, default=0.1,
+                        help="Weight for invertible cycle consistency loss.")
     args = parser.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"[Train Refiner] device: {device}, target steps: {args.steps}")
+    print(f"[Train Refiner] device: {device}, target steps: {args.steps}, invertible: {args.invertible}, cauchy: {args.use_cauchy}")
 
     train_ds = KubricTrackDataset(args.cache_dir, clip_len=args.clip_len, split="train", holdout=2)
     val_ds = KubricTrackDataset(args.cache_dir, clip_len=args.clip_len, split="val", holdout=2)
@@ -132,10 +141,12 @@ def main():
     train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, drop_last=True)
     val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False)
 
-    model = TrackRefiner(in_dim=7, hidden_dim=128, num_layers=4, num_heads=4).to(device)
-    # Initialize delta head with small random weights so gradients flow immediately
-    nn.init.normal_(model.delta_head[-1].weight, std=1e-3)
-    nn.init.zeros_(model.delta_head[-1].bias)
+    if args.invertible:
+        model = InvertibleTrackRefiner(in_dim=7, hidden_dim=128, num_layers=4, num_heads=4, num_coupling_layers=4).to(device)
+    else:
+        model = TrackRefiner(in_dim=7, hidden_dim=128, num_layers=4, num_heads=4).to(device)
+        nn.init.normal_(model.delta_head[-1].weight, std=1e-3)
+        nn.init.zeros_(model.delta_head[-1].bias)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.steps, eta_min=args.lr * 0.05)
@@ -159,12 +170,23 @@ def main():
             optimizer.zero_grad()
             pred_p, pred_c = model(noisy_p, noisy_c, img_size=img_hw)
 
-            # 1. Position error against GT
-            l_pos = pos_criterion(pred_p, gt_p)
+            # 1. Position error against GT (Cauchy robust or Smooth L1)
+            if args.use_cauchy:
+                per_pt_loss = cauchy_loss(pred_p, gt_p, c=4.0)
+                if args.loss_quantile < 1.0:
+                    l_pos = trimmed_mean(per_pt_loss, quantile=args.loss_quantile)
+                else:
+                    l_pos = per_pt_loss.mean()
+            else:
+                l_pos = pos_criterion(pred_p, gt_p)
+
             # Extra penalty on occluded frames where drift occurs
             occl_mask = (gt_vis == 0)
             if torch.any(occl_mask):
-                l_pos_occl = pos_criterion(pred_p[occl_mask], gt_p[occl_mask]) * 3.0
+                if args.use_cauchy:
+                    l_pos_occl = cauchy_loss(pred_p[occl_mask], gt_p[occl_mask], c=4.0).mean() * 3.0
+                else:
+                    l_pos_occl = pos_criterion(pred_p[occl_mask], gt_p[occl_mask]) * 3.0
             else:
                 l_pos_occl = 0.0
 
@@ -175,7 +197,14 @@ def main():
             # 3. Confidence calibration BCE
             l_conf = conf_criterion(pred_c.squeeze(-1), gt_vis)
 
-            total_loss = l_pos + l_pos_occl + l_smooth + 0.1 * l_conf
+            # 4. Invertibility cycle consistency loss
+            if args.invertible and args.cycle_weight > 0.0:
+                p_cycle, _ = model(pred_p, pred_c, img_size=img_hw, inverse=True)
+                l_cycle = torch.mean(torch.norm(p_cycle - noisy_p, dim=-1)) * args.cycle_weight
+            else:
+                l_cycle = 0.0
+
+            total_loss = l_pos + l_pos_occl + l_smooth + 0.1 * l_conf + l_cycle
             total_loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()

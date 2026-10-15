@@ -114,18 +114,20 @@ class KubricTrackDataset(Dataset):
 def main():
     parser = argparse.ArgumentParser(description="Train Neural Trajectory Refiner")
     parser.add_argument("--cache-dir", default=os.path.join(ROOT, "datasets", "kubric_cache"))
-    parser.add_argument("--steps", type=int, default=3000)
+    parser.add_argument("--steps", type=int, default=20000)
+    parser.add_argument("--save-every", type=int, default=2000)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--clip-len", type=int, default=64)
-    parser.add_argument("--out", default=os.path.join(ROOT, "weights", "track_refiner_v1.pt"))
+    parser.add_argument("--log-file", default=os.path.join(ROOT, "weights", "refiner_training.log"))
+    parser.add_argument("--out", default=os.path.join(ROOT, "weights", "track_refiner_20k.pt"))
     args = parser.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"[Train Refiner] device: {device}, target steps: {args.steps}")
 
-    train_ds = KubricTrackDataset(args.cache_dir, clip_len=args.clip_len, split="train", holdout=1)
-    val_ds = KubricTrackDataset(args.cache_dir, clip_len=args.clip_len, split="val", holdout=1)
+    train_ds = KubricTrackDataset(args.cache_dir, clip_len=args.clip_len, split="train", holdout=2)
+    val_ds = KubricTrackDataset(args.cache_dir, clip_len=args.clip_len, split="val", holdout=2)
 
     train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, drop_last=True)
     val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False)
@@ -180,14 +182,16 @@ def main():
             scheduler.step()
 
             if step % 250 == 0 or step == 1:
-                # Calculate pixel error before vs after refiner
                 err_raw = torch.mean(torch.norm(noisy_p - gt_p, dim=-1)).item()
                 err_refined = torch.mean(torch.norm(pred_p - gt_p, dim=-1)).item()
                 dt = time.time() - t0
-                print(f"Step {step:04d}/{args.steps} | Loss: {total_loss.item():.4f} (pos: {l_pos.item():.4f}) | "
-                      f"Raw Err: {err_raw:.2f} px -> Refined Err: {err_refined:.2f} px | {dt:.1f}s")
+                log_line = (f"Step {step:05d}/{args.steps} | Loss: {total_loss.item():.4f} (pos: {l_pos.item():.4f}) | "
+                            f"Raw Err: {err_raw:.2f} px -> Refined Err: {err_refined:.2f} px | {dt:.1f}s")
+                print(log_line)
+                with open(args.log_file, "a") as log_f:
+                    log_f.write(f"{time.time()},{step},{total_loss.item():.4f},{l_pos.item():.4f},{err_raw:.4f},{err_refined:.4f}\n")
 
-            if step % 1000 == 0 or step == args.steps:
+            if step % args.save_every == 0 or step == args.steps:
                 model.eval()
                 val_err_raw = []
                 val_err_ref = []
@@ -198,20 +202,25 @@ def main():
                         vp_p, vp_c = model(vn_p, vn_c, img_size=v_hw)
                         val_err_raw.append(torch.mean(torch.norm(vn_p - v_gt_p, dim=-1)).item())
                         val_err_ref.append(torch.mean(torch.norm(vp_p - v_gt_p, dim=-1)).item())
-                        if len(val_err_raw) >= 10:
+                        if len(val_err_raw) >= 15:
                             break
                 m_raw = np.mean(val_err_raw)
                 m_ref = np.mean(val_err_ref)
-                print(f"  [Validation @ {step}] Mean Raw Error: {m_raw:.2f} px -> Refined Error: {m_ref:.2f} px (Gain: {m_raw - m_ref:.2f} px)")
-                
-                os.makedirs(os.path.dirname(args.out), exist_ok=True)
-                torch.save({
+                val_str = f"  [Validation @ {step}] Mean Raw Error: {m_raw:.2f} px -> Refined Error: {m_ref:.2f} px (Gain: {m_raw - m_ref:.2f} px)"
+                print(val_str)
+                with open(args.log_file, "a") as log_f:
+                    log_f.write(f"# {val_str}\n")
+
+                ckpt_data = {
                     "step": step,
                     "model_state_dict": model.state_dict(),
                     "val_err_raw": m_raw,
                     "val_err_refined": m_ref
-                }, args.out)
-                print(f"  [Saved Checkpoint] {args.out}")
+                }
+                torch.save(ckpt_data, args.out)
+                rolling_path = args.out.replace(".pt", f"_step{step}.pt")
+                torch.save(ckpt_data, rolling_path)
+                print(f"  [Saved Checkpoint] {args.out} and {rolling_path}")
                 model.train()
 
     print(f"[Train Refiner] training completed in {time.time() - t0:.1f}s!")

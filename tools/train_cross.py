@@ -356,17 +356,29 @@ def main() -> int:
 
         if step % a.log_every == 0:
             el = time.time() - t0
-            print("[{:>6}/{}] loss {:.4f}  lr {:.2e}  gnorm {:.2f} clip {:.0f}%  "
-                  "{:.2f}s/step  vram {:.1f}GB  eta {:.1f}h".format(
-                      step, a.steps, running / max(1, seen), sched.get_last_lr()[0],
-                      gn_sum / max(1, gn_n), 100.0 * gn_clipped / max(1, gn_n),
-                      el / step, torch.cuda.max_memory_allocated() / 1e9,
-                      el / step * (a.steps - step) / 3600.0), flush=True)
+            msg = ("[{:>6}/{}] loss {:.4f}  lr {:.2e}  gnorm {:.2f} clip {:.0f}%  "
+                   "{:.2f}s/step  vram {:.1f}GB  eta {:.1f}h".format(
+                       step, a.steps, running / max(1, seen), sched.get_last_lr()[0],
+                       gn_sum / max(1, gn_n), 100.0 * gn_clipped / max(1, gn_n),
+                       el / step, torch.cuda.max_memory_allocated() / 1e9,
+                       el / step * (a.steps - step) / 3600.0))
+            print(msg, flush=True)
+            try:
+                with open(os.path.splitext(a.out)[0] + ".log", "a") as f_log:
+                    f_log.write(msg + "\n")
+            except Exception:
+                pass
             running, seen = 0.0, 0
             gn_sum, gn_n, gn_clipped = 0.0, 0, 0
         if step % a.save_every == 0 or step == a.steps:
             save(step, running / max(1, seen))
-            print("[save] {} at step {}".format(a.out, step), flush=True)
+            save_msg = "[save] {} at step {}".format(a.out, step)
+            print(save_msg, flush=True)
+            try:
+                with open(os.path.splitext(a.out)[0] + ".log", "a") as f_log:
+                    f_log.write(save_msg + "\n")
+            except Exception:
+                pass
 
     print("[done] {:.1f}h".format((time.time() - t0) / 3600.0))
     return 0

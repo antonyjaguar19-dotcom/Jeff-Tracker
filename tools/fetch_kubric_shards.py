@@ -40,13 +40,26 @@ def main():
 
         print(f"  [downloading] {filename}...", flush=True)
         t_dl = time.time()
-        p = hf_hub_download(
-            repo_id=repo_id,
-            filename=filename,
-            repo_type="dataset",
-            local_dir=a.out_dir,
-            local_dir_use_symlinks=False,
-        )
+        max_retries = 8
+        p = None
+        for attempt in range(1, max_retries + 1):
+            try:
+                p = hf_hub_download(
+                    repo_id=repo_id,
+                    filename=filename,
+                    repo_type="dataset",
+                    local_dir=a.out_dir,
+                    local_dir_use_symlinks=False,
+                )
+                break
+            except Exception as exc:
+                if attempt == max_retries:
+                    print(f"  [error] failed to download {filename} after {max_retries} attempts: {exc}")
+                    raise
+                wait = min(30, 2 ** attempt)
+                print(f"  [retry {attempt}/{max_retries}] download failed ({exc}), retrying in {wait}s...", flush=True)
+                time.sleep(wait)
+
         sz_mb = os.path.getsize(p) / (1024 * 1024)
         print(f"  [done] {filename} ({sz_mb:.1f} MB, {time.time() - t_dl:.1f}s)")
         downloaded.append(p)

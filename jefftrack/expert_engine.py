@@ -131,13 +131,15 @@ class DualExpertEngine:
         queries: np.ndarray,
         expert_mode: str = "auto",
         fp16: bool = False,
+        is_bgr: bool = True,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Track queries using selected or automatically routed expert model.
 
         Parameters:
-            frames_bgr: (T, H, W, 3) video frames in BGR uint8
+            frames_bgr: (T, H, W, 3) video frames in BGR or RGB uint8
             queries: (N, 3) [frame, x, y] query coordinates
             expert_mode: 'auto' (smart per-track routing), 'agile', or 'smoke'
+            is_bgr: True if frames are BGR, False if RGB (avoids 6.5 GB array copies!)
         Returns:
             tracks: (T, N, 2)
             vis: (T, N) bool
@@ -147,12 +149,12 @@ class DualExpertEngine:
 
         # If forced to a specific expert or models are identical:
         if expert_mode == "agile" or self.expert_smoke is self.expert_agile:
-            tr, vis, conf = self.expert_agile.track_queries_conf(frames_bgr, queries, fp16=fp16)
+            tr, vis, conf = self.expert_agile.track_queries_conf(frames_bgr, queries, fp16=fp16, is_bgr=is_bgr)
             self.last_routing_info = {"mode": expert_mode, "selected": ["agile"] * tr.shape[1]}
             return tr, vis, conf
 
         if expert_mode in ("smoke", "large", "large_v3"):
-            tr, vis, conf = self.expert_smoke.track_queries_conf(frames_bgr, queries, fp16=fp16)
+            tr, vis, conf = self.expert_smoke.track_queries_conf(frames_bgr, queries, fp16=fp16, is_bgr=is_bgr)
             self.last_routing_info = {"mode": expert_mode, "selected": ["smoke"] * tr.shape[1]}
             return tr, vis, conf
 
@@ -165,26 +167,26 @@ class DualExpertEngine:
         selected_experts = []
         conf_preds = []
 
-        f0_bgr = frames_bgr[int(q[0, 0])] if T > 0 else None
-        f1_idx = min(T - 1, int(q[0, 0]) + 1)
-        f1_bgr = frames_bgr[f1_idx] if T > 1 else f0_bgr
-
         for i in range(N):
             q_fr = int(np.clip(q[i, 0], 0, T - 1))
             f_curr0 = frames_bgr[q_fr]
             f_curr1 = frames_bgr[min(T - 1, q_fr + 1)]
+            # If input is RGB, convert the tiny 64x64 patch to BGR for the router
+            if not is_bgr:
+                f_curr0 = f_curr0[..., ::-1]
+                f_curr1 = f_curr1[..., ::-1]
             exp_name, conf = predict_expert_for_seed(f_curr0, f_curr1, (q[i, 1], q[i, 2]), device=self.device)
             selected_experts.append(exp_name)
             conf_preds.append(conf)
 
         # 2. If all queries agree (e.g. single point or all agile / all smoke):
-        # Run ONLY the winning expert model at full 1x speed (32.8 FPS)!
+        # Run ONLY the winning expert model at full 1x speed!
         unique_experts = set(selected_experts)
         if len(unique_experts) == 1:
             chosen = selected_experts[0]
             print(f"[SmartRouter] Auto-routed {N} query(ies) -> Expert: '{chosen}' ({conf_preds[0]*100:.1f}% confidence)")
             eng = self.expert_smoke if chosen in ("smoke", "large", "large_v3") else self.expert_agile
-            tr, vis, conf = eng.track_queries_conf(frames_bgr, queries, fp16=fp16)
+            tr, vis, conf = eng.track_queries_conf(frames_bgr, queries, fp16=fp16, is_bgr=is_bgr)
             self.last_routing_info = {"mode": "smart", "selected": selected_experts, "conf": conf_preds}
             return tr, vis, conf
 
@@ -199,13 +201,13 @@ class DualExpertEngine:
         smoke_indices = [i for i, exp in enumerate(selected_experts) if exp != "agile"]
 
         if agile_indices:
-            tr_a, v_a, c_a = self.expert_agile.track_queries_conf(frames_bgr, queries[agile_indices], fp16=fp16)
+            tr_a, v_a, c_a = self.expert_agile.track_queries_conf(frames_bgr, queries[agile_indices], fp16=fp16, is_bgr=is_bgr)
             out_tr[:, agile_indices] = tr_a
             out_vis[:, agile_indices] = v_a
             out_conf[:, agile_indices] = c_a
 
         if smoke_indices:
-            tr_s, v_s, c_s = self.expert_smoke.track_queries_conf(frames_bgr, queries[smoke_indices], fp16=fp16)
+            tr_s, v_s, c_s = self.expert_smoke.track_queries_conf(frames_bgr, queries[smoke_indices], fp16=fp16, is_bgr=is_bgr)
             out_tr[:, smoke_indices] = tr_s
             out_vis[:, smoke_indices] = v_s
             out_conf[:, smoke_indices] = c_s

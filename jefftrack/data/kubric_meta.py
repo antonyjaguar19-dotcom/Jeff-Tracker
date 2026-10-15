@@ -40,6 +40,7 @@ probabilities).
 from __future__ import annotations
 
 import os
+import time
 from typing import Iterator, List, Optional, Sequence, Tuple
 
 import cv2
